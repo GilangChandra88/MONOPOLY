@@ -432,8 +432,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ── Beli Rumah ─────────────────────────────────────────────────────────────
   buyHouse: (squareId: number) => {
     const state = get();
-    const { players, currentPlayerIndex } = state;
-    const player = players[currentPlayerIndex];
+    const { players, ownedProperties } = state;
+    const ownerId = ownedProperties[squareId];
+    if (!ownerId) return;
+    
+    const ownerIndex = players.findIndex(p => p.id === ownerId);
+    if (ownerIndex === -1) return;
+    
+    const owner = players[ownerIndex];
     const square = BOARD_SQUARES[squareId];
 
     if (!isProperty(square)) return;
@@ -442,39 +448,43 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const houses = state.houses[squareId] ?? 0;
     if (houses >= 4) {
       // Beli hotel
-      if (player.money < square.hotelCost) return;
+      if (owner.money < square.hotelCost) return;
       state._pushHistory();
       const newPlayers = [...players];
-      newPlayers[currentPlayerIndex] = { ...player, money: player.money - square.hotelCost };
+      newPlayers[ownerIndex] = { ...owner, money: owner.money - square.hotelCost };
       const newHouses = { ...state.houses };
       delete newHouses[squareId];
       set({
         players: newPlayers,
         houses: newHouses,
         hotels: { ...state.hotels, [squareId]: true },
-        lastTransaction: { id: Date.now().toString(), amount: square.hotelCost, fromId: player.id, toId: 'bank' },
-        phase: 'end-turn', // Batasi 1 per landing
-        log: [...state.log, `${player.name} membangun HOTEL di ${square.name}! 🏨`],
+        lastTransaction: { id: Date.now().toString(), amount: square.hotelCost, fromId: owner.id, toId: 'bank' },
+        log: [...state.log, `${owner.name} membangun HOTEL di ${square.name}! 🏨`],
       });
     } else {
-      if (player.money < square.houseCost) return;
+      if (owner.money < square.houseCost) return;
       state._pushHistory();
       const newPlayers = [...players];
-      newPlayers[currentPlayerIndex] = { ...player, money: player.money - square.houseCost };
+      newPlayers[ownerIndex] = { ...owner, money: owner.money - square.houseCost };
       set({
         players: newPlayers,
         houses: { ...state.houses, [squareId]: houses + 1 },
-        lastTransaction: { id: Date.now().toString(), amount: square.houseCost, fromId: player.id, toId: 'bank' },
-        phase: 'end-turn', // Batasi 1 per landing
-        log: [...state.log, `${player.name} membangun 1 RUMAH di ${square.name}.`],
+        lastTransaction: { id: Date.now().toString(), amount: square.houseCost, fromId: owner.id, toId: 'bank' },
+        log: [...state.log, `${owner.name} membangun 1 RUMAH di ${square.name}.`],
       });
     }
   },
 
   sellHouse: (squareId: number) => {
     const state = get();
-    const { players, currentPlayerIndex } = state;
-    const player = players[currentPlayerIndex];
+    const { players, ownedProperties } = state;
+    const ownerId = ownedProperties[squareId];
+    if (!ownerId) return;
+    
+    const ownerIndex = players.findIndex(p => p.id === ownerId);
+    if (ownerIndex === -1) return;
+    
+    const owner = players[ownerIndex];
     const square = BOARD_SQUARES[squareId];
 
     if (!isProperty(square)) return;
@@ -485,46 +495,51 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (hasHotel) {
       const salePrice = square.hotelCost / 2;
       const newPlayers = [...players];
-      newPlayers[currentPlayerIndex] = { ...player, money: player.money + salePrice };
+      newPlayers[ownerIndex] = { ...owner, money: owner.money + salePrice };
       const newHotels = { ...state.hotels };
       delete newHotels[squareId];
       set({
         players: newPlayers,
         hotels: newHotels,
         houses: { ...state.houses, [squareId]: 4 },
-        log: [...state.log, `${player.name} menjual hotel di ${square.name} seharga ${fmt(salePrice)}.`],
+        log: [...state.log, `${owner.name} menjual hotel di ${square.name} seharga ${fmt(salePrice)}.`],
       });
     } else if (houses > 0) {
       const salePrice = square.houseCost / 2;
       const newPlayers = [...players];
-      newPlayers[currentPlayerIndex] = { ...player, money: player.money + salePrice };
+      newPlayers[ownerIndex] = { ...owner, money: owner.money + salePrice };
       set({
         players: newPlayers,
         houses: { ...state.houses, [squareId]: houses - 1 },
-        log: [...state.log, `${player.name} menjual 1 rumah di ${square.name} seharga ${fmt(salePrice)}.`],
+        log: [...state.log, `${owner.name} menjual 1 rumah di ${square.name} seharga ${fmt(salePrice)}.`],
       });
     }
   },
 
   sellProperty: (squareId: number) => {
     const state = get();
-    const { players, currentPlayerIndex, ownedProperties, houses, hotels } = state;
-    const player = players[currentPlayerIndex];
+    const { players, ownedProperties, houses, hotels } = state;
+    const ownerId = ownedProperties[squareId];
+    
+    // Pastikan ada pemiliknya
+    if (!ownerId) return;
+    
+    const ownerIndex = players.findIndex(p => p.id === ownerId);
+    if (ownerIndex === -1) return;
+    
+    const owner = players[ownerIndex];
     const square = BOARD_SQUARES[squareId];
     
-    // Pastikan milik pemain ini dan tidak ada bangunan
-    if (ownedProperties[squareId] !== player.id) return;
     if (houses[squareId] > 0 || hotels[squareId]) {
-      // alert("Jual bangunan terlebih dahulu!"); // handled in UI
       return; 
     }
     
     const salePrice = (square as any).price / 2; // Jual ke bank setengah harga (mortgage)
     const newPlayers = [...players];
-    newPlayers[currentPlayerIndex] = {
-      ...player,
-      money: player.money + salePrice,
-      properties: player.properties.filter(id => id !== squareId)
+    newPlayers[ownerIndex] = {
+      ...owner,
+      money: owner.money + salePrice,
+      properties: owner.properties.filter(id => id !== squareId)
     };
     
     const newOwned = { ...ownedProperties };
@@ -533,7 +548,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       players: newPlayers,
       ownedProperties: newOwned,
-      log: [...state.log, `${player.name} menjual ${square.name} ke bank seharga ${fmt(salePrice)}.`]
+      log: [...state.log, `${owner.name} menjual ${square.name} ke bank seharga ${fmt(salePrice)}.`]
     });
   },
 
