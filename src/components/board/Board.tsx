@@ -251,21 +251,14 @@ function SquareCell({ id }: SquareCellProps) {
 
 // ─── Board Utama ──────────────────────────────────────────────────────────────
 export default function Board() {
-  const { players, currentPlayerIndex, phase, movementSteps, performStepMovement, isOnline } = useGameStore();
+  const { players, currentPlayerIndex, phase, movementSteps, isOnline } = useGameStore();
 
   const currentPlayer = players[currentPlayerIndex];
   const isMe = !isOnline || currentPlayer?.userId === auth.currentUser?.uid;
 
-  // Jalankan interval pergerakan karakter jika sedang dalam fase 'moving'
-  // HANYA pada klien pemain aktif untuk mencegah balapan (race condition) dari Firebase
+  // Board.tsx sudah tidak dipakai di versi 3D, jadi tidak perlu loop pergerakan
   useEffect(() => {
-    if (phase === 'moving' && movementSteps > 0 && isMe) {
-      const timer = setTimeout(() => {
-        performStepMovement();
-      }, 400); // Waktu per langkah: 400ms
-      return () => clearTimeout(timer);
-    }
-  }, [phase, movementSteps, performStepMovement, isMe]);
+  }, [phase, movementSteps, isMe]);
 
   // Dapatkan posisi pemain saat ini untuk fokus kamera
   const activePosition = currentPlayer ? currentPlayer.position : 0;

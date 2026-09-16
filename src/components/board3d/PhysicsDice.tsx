@@ -6,6 +6,18 @@ import * as THREE from 'three';
 import { Text, Box } from '@react-three/drei';
 import { auth } from '../../firebase';
 
+const getRotationForValue = (val: number): { x: number, y: number, z: number } => {
+  switch (val) {
+    case 1: return { x: -Math.PI / 2, y: 0, z: 0 };
+    case 6: return { x: Math.PI / 2, y: 0, z: 0 };
+    case 2: return { x: 0, y: 0, z: Math.PI / 2 };
+    case 5: return { x: 0, y: 0, z: -Math.PI / 2 };
+    case 3: return { x: 0, y: 0, z: 0 };
+    case 4: return { x: Math.PI, y: 0, z: 0 };
+    default: return { x: 0, y: 0, z: 0 };
+  }
+};
+
 // Helper to determine which face is up
 const getDiceValue = (quaternion: THREE.Quaternion) => {
   // Define the normals for the 6 faces based on default BoxGeometry orientation
@@ -72,13 +84,15 @@ function SinglePhysicsDice({
   isDragging,
   dragPoint,
   onSleep,
-  isRolling
+  isRolling,
+  logicalValue
 }: { 
   id: number,
   isDragging: boolean,
   dragPoint: THREE.Vector3,
   onSleep: (val: number, pos: [number, number, number], quat: [number, number, number, number]) => void,
-  isRolling: boolean
+  isRolling: boolean,
+  logicalValue: number
 }) {
   const rigidBody = useRef<RapierRigidBody>(null);
   const prevDragging = useRef(false);
@@ -88,26 +102,24 @@ function SinglePhysicsDice({
   const throwVel = useRef(new THREE.Vector3());
   
   // Deteksi status online untuk sinkronisasi dadu statis
-  const diceResultPositions = useGameStore(s => s.diceResultPositions);
-  const diceResultRotations = useGameStore(s => s.diceResultRotations);
   const isMe = !useGameStore(s => s.isOnline) || useGameStore(s => s.players[s.currentPlayerIndex]?.userId) === auth.currentUser?.uid;
 
   useFrame((state, delta) => {
     if (!rigidBody.current) return;
     
-    // Pindahkan secara statis ke hasil jika ada (untuk sinkronisasi, dan persistensi saat reload)
-    // Terapkan ke SEMUA orang jika dadu tidak sedang dipegang atau dilempar
-    if (diceResultPositions && diceResultRotations && !isRolling && !isDragging) {
-      const targetPos = id === 1 ? diceResultPositions.d1 : diceResultPositions.d2;
-      const targetRot = id === 1 ? diceResultRotations.d1 : diceResultRotations.d2;
+    // Observers TIDAK MENSIMULASIKAN FISIKA! Mereka hanya melihat hasil akhirnya secara statis di tengah papan.
+    if (!isMe) {
+      // Kita tambahkan sedikit animasi "bling" (berputar/mengambang sedikit) saat isRolling true jika diinginkan,
+      // Tapi sesuai request, cukup diam saja dan update hasil
+      const targetRot = getRotationForValue(logicalValue);
+      const targetPos = { x: id === 1 ? -2 : 2, y: 0.5, z: 0 };
       
-      // Jika dadu belum sleep (diduplikat di sesi lain), force lock posisinya
-      if (rigidBody.current && targetPos && targetRot) {
-        rigidBody.current.setTranslation({ x: targetPos[0], y: targetPos[1], z: targetPos[2] }, true);
-        rigidBody.current.setRotation({ x: targetRot[0], y: targetRot[1], z: targetRot[2], w: targetRot[3] }, true);
-        rigidBody.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
-        rigidBody.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
-      }
+      rigidBody.current.setTranslation(targetPos, true);
+      const euler = new THREE.Euler(targetRot.x, targetRot.y, targetRot.z);
+      const quat = new THREE.Quaternion().setFromEuler(euler);
+      rigidBody.current.setRotation(quat, true);
+      rigidBody.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      rigidBody.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
       return;
     }
 
@@ -164,10 +176,15 @@ function SinglePhysicsDice({
   }, [isDragging]);
 
   const physicsRollTrigger = useGameStore(s => s.physicsRollTrigger);
+  const prevTrigger = useRef(physicsRollTrigger);
+
   useEffect(() => {
-    if (physicsRollTrigger > 0 && isRolling && rigidBody.current) {
-      // Lemparan otomatis via tombol UI (programmatic roll) untuk semua client
-      // Taruh dadu agak ke atas, beri kecepatan acak
+    // Hanya picu roll otomatis JIKA trigger angkanya BENAR-BENAR BERUBAH (baru ditekan),
+    // BUKAN hanya karena isRolling berubah (saat user melempar manual).
+    if (physicsRollTrigger > 0 && physicsRollTrigger !== prevTrigger.current && isRolling && rigidBody.current && isMe) {
+      prevTrigger.current = physicsRollTrigger;
+      
+      // Lemparan otomatis via tombol UI (programmatic roll)
       const offset = id === 1 ? -1 : 1;
       rigidBody.current.setTranslation({ x: offset * 2, y: 5 + Math.random() * 2, z: (Math.random() - 0.5) * 4 }, true);
       rigidBody.current.setLinvel({
@@ -181,7 +198,7 @@ function SinglePhysicsDice({
         z: (Math.random() - 0.5) * 30
       }, true);
     }
-  }, [physicsRollTrigger, isRolling, id]);
+  }, [physicsRollTrigger, isRolling, id, isMe]);
 
   const handleSleep = () => {
     if (isRolling && !isDragging && isMe) {
@@ -221,7 +238,7 @@ function SinglePhysicsDice({
 }
 
 export default function PhysicsDiceManager() {
-  const { phase, rollDiceAction, resolveRollWithPhysics, players, currentPlayerIndex, isOnline, isDraggingDice, setIsDraggingDice } = useGameStore();
+  const { phase, dice, rollDiceAction, resolveRollWithPhysics, players, currentPlayerIndex, isOnline, isDraggingDice, setIsDraggingDice } = useGameStore();
   
   const [d1Result, setD1Result] = useState<{val: number, pos: [number, number, number], quat: [number, number, number, number]} | null>(null);
   const [d2Result, setD2Result] = useState<{val: number, pos: [number, number, number], quat: [number, number, number, number]} | null>(null);
@@ -330,9 +347,9 @@ export default function PhysicsDiceManager() {
     if (isRolling && d1Result !== null && d2Result !== null && isMe) {
       const timer = setTimeout(() => {
         resolveRollWithPhysics(
-          d1Result.val, d2Result.val, 
-          { d1: d1Result.pos, d2: d2Result.pos }, 
-          { d1: d1Result.quat, d2: d2Result.quat }
+          d1Result.val, 
+          d2Result.val,
+          { d1: d1Result.pos, d2: d2Result.pos }
         );
       }, 500); // 500ms diam setelah jatuh, lalu mulai sekuens kamera
       return () => clearTimeout(timer);
@@ -366,6 +383,7 @@ export default function PhysicsDiceManager() {
         dragPoint={dragPoint} 
         onSleep={(val, pos, quat) => setD1Result({val, pos, quat})} 
         isRolling={phase === 'rolling' || phase === 'dice-result-1' || phase === 'dice-result-2' || phase === 'pre-moving'} 
+        logicalValue={dice[0]}
       />
       
       <SinglePhysicsDice 
@@ -373,7 +391,8 @@ export default function PhysicsDiceManager() {
         isDragging={isDraggingDice} 
         dragPoint={dragPoint} 
         onSleep={(val, pos, quat) => setD2Result({val, pos, quat})} 
-        isRolling={phase === 'rolling' || phase === 'dice-result-1' || phase === 'dice-result-2' || phase === 'pre-moving'} 
+        isRolling={phase === 'rolling' || phase === 'dice-result-1' || phase === 'dice-result-2' || phase === 'pre-moving'}
+        logicalValue={dice[1]}
       />
 
       {/* Visual Indicator saat user menahan klik */}

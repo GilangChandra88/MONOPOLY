@@ -38,8 +38,7 @@ function createInitialState(players: Player[]): GameState {
     currentPlayerIndex: 0,
     phase: 'idle',
     dice: [1, 1],
-    diceResultPositions: null,
-    diceResultRotations: null,
+    localDicePositions: null,
     cameraStates: {},
     doublesCount: 0,
     ownedProperties: {},
@@ -81,12 +80,11 @@ interface GameStore extends GameState {
   rollDiceAction: () => void;
   resolveRollWithPhysics: (
     d1: number, 
-    d2: number, 
-    dicePositions?: { d1: [number, number, number], d2: [number, number, number] },
-    diceRotations?: { d1: [number, number, number, number], d2: [number, number, number, number] }
+    d2: number,
+    dicePositions?: { d1: [number, number, number], d2: [number, number, number] }
   ) => void;
   resolveRoll: () => void;
-  performStepMovement: () => void;
+  _executeInstantMovement: (player: Player, steps: number, direction: 1 | -1) => void;
   endTurn: () => void;
   saveCameraState: (userId: string, pos: [number, number, number], target: [number, number, number]) => void;
 
@@ -199,18 +197,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // Dipanggil oleh komponen fisika setelah dadu benar-benar berhenti
   resolveRollWithPhysics: (
     d1: number, 
-    d2: number, 
-    dicePositions?: { d1: [number, number, number], d2: [number, number, number] },
-    diceRotations?: { d1: [number, number, number, number], d2: [number, number, number, number] }
+    d2: number,
+    dicePositions?: { d1: [number, number, number], d2: [number, number, number] }
   ) => {
     const state = get();
     if (state.phase !== 'rolling') return;
     
-    // Set hasil lemparan dan posisi kedua dadu, mulai dengan fokus ke dadu 1
+    // Set hasil lemparan, mulai dengan fokus ke dadu 1
     set({ 
-      dice: [d1, d2], 
-      diceResultPositions: dicePositions || null, 
-      diceResultRotations: diceRotations || null,
+      dice: [d1, d2],
+      localDicePositions: dicePositions || null,
       phase: 'dice-result-1' 
     });
     
@@ -303,26 +299,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Gerak normal (Persiapan melompat)
     set({
       doublesCount: newDoublesCount,
-      phase: 'moving',
-      movementSteps: total,
-      movementDirection: 1,
       log: [...state.log, `${player.name} melempar dadu ${dice[0]}+${dice[1]}=${total}`],
     });
+    
+    get()._executeInstantMovement(player, total, 1);
   },
 
-  performStepMovement: () => {
+  _executeInstantMovement: (player: any, steps: number, direction: 1 | -1) => {
     const state = get();
-    if (state.phase !== 'moving' || state.movementSteps <= 0) return;
-
-    const { players, currentPlayerIndex, movementSteps, movementDirection } = state;
-    const player = players[currentPlayerIndex];
-    const newPos = (player.position + movementDirection + 40) % 40;
-    let updatedPlayer = { ...player, position: newPos };
-    
+    const finalPos = (player.position + (steps * direction) + 40) % 40;
+    let updatedPlayer = { ...player };
     let newLog = [...state.log];
     let newTransaction = state.lastTransaction;
 
-    if (newPos === 0 && movementDirection === 1) {
+    // Cek melewati GO
+    if (direction === 1 && finalPos < player.position) {
       updatedPlayer = applyGoBonus(updatedPlayer);
       newLog = [...newLog, `${player.name} melewati MULAI! +${fmt(GO_MONEY)}`];
       newTransaction = {
@@ -332,19 +323,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
         toId: player.id
       };
     }
+    
+    updatedPlayer.position = finalPos;
+    const newPlayers = [...state.players];
+    const pIdx = state.players.findIndex(p => p.id === player.id);
+    newPlayers[pIdx] = updatedPlayer;
 
-    const newPlayers = [...players];
-    newPlayers[currentPlayerIndex] = updatedPlayer;
-    const remainingSteps = movementSteps - 1;
+    // Set state agar observer menerima posisi akhir SEKALI SAJA dan menganimasikannya sendiri
+    set({
+      players: newPlayers,
+      movementSteps: steps, // Tells PlayerToken3D to animate 'steps' hops
+      movementDirection: direction,
+      phase: 'moving',
+      log: newLog,
+      lastTransaction: newTransaction
+    });
 
-    set({ players: newPlayers, movementSteps: remainingSteps, log: newLog, lastTransaction: newTransaction });
-
-    if (remainingSteps === 0) {
-      set({ phase: 'post-moving' });
+    // Tunggu visual animasi selesai sebelum menjalankan aksi pendaratan
+    // 250ms per step (karena PlayerToken3D bergerak 4 kotak per detik) + 250ms ekstra padding
+    setTimeout(() => {
+      set({ phase: 'post-moving', movementSteps: 0 });
       setTimeout(() => {
-        get()._handleLanding(newPos, get().players[currentPlayerIndex]);
-      }, 1000);
-    }
+        get()._handleLanding(finalPos, get().players[pIdx]);
+      }, 500);
+    }, steps * 250 + 250);
   },
 
 
@@ -612,9 +614,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const newState = get();
     const updatedPlayer = newState.players[newState.currentPlayerIndex];
 
-    // JIKA kartu menyebabkan 'moving' (seperti move-to, jail, dll), biarkan animasinya berjalan 
-    // dan performStepMovement yang akan memanggil _handleLanding saat selesai.
+    // JIKA kartu menyebabkan 'moving' (seperti move-to, jail, dll),
+    // trigger _executeInstantMovement
     if (activeCard.effect.type.startsWith('move') || activeCard.effect.type === 'jail') {
+      const steps = updatedState.movementSteps || 0;
+      const direction = updatedState.movementDirection || 1;
+      // Undo efek setting phase 'moving' sementara dari applyCardEffect 
+      // karena _executeInstantMovement akan menanganinya
+      get()._executeInstantMovement(updatedPlayer, steps, direction as 1|-1);
       return;
     }
 
@@ -768,13 +775,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       case 'go-to-jail': {
         const steps = player.position > 10 ? player.position - 10 : 10 - player.position;
         const direction = player.position > 10 ? -1 : 1;
-        set({
-          phase: 'moving',
-          movementSteps: steps,
-          movementDirection: direction,
-          isGoingToJail: true,
-          log: [...get().log, `${player.name} terkena razia! Berjalan menuju penjara...`]
-        });
+        
+        // Kita flag bahwa tujuannya adalah masuk penjara
+        set({ isGoingToJail: true });
+        get()._executeInstantMovement(player, steps, direction as 1|-1);
         break;
       }
 

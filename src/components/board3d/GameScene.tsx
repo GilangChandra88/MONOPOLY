@@ -10,19 +10,12 @@ import { useGameStore } from '../../store/useGameStore';
 import { auth } from '../../firebase';
 
 export default function GameScene() {
-  const { players, phase, movementSteps, performStepMovement, isOnline, currentPlayerIndex } = useGameStore();
+  const { players, phase, movementSteps, isOnline, currentPlayerIndex } = useGameStore();
   const currentPlayer = players[currentPlayerIndex];
   const isMe = !isOnline || currentPlayer?.userId === auth.currentUser?.uid;
 
-  // Loop pergerakan pemain (Sekarang dijalankan di SEMUA client agar tersinkronisasi visualnya)
-  React.useEffect(() => {
-    if (phase === 'moving' && movementSteps > 0) {
-      const timer = setTimeout(() => {
-        performStepMovement();
-      }, 300); // 300ms per lompatan (atur kecepatan di sini)
-      return () => clearTimeout(timer);
-    }
-  }, [phase, movementSteps, performStepMovement]);
+  // Pergerakan pemain sekarang ditangani sepenuhnya melalui interpolasi visual di PlayerToken3D
+  // tanpa membebani state/Firebase dengan update per-langkah.
 
   return (
     <div className="absolute inset-0 w-full h-full bg-slate-900 z-0">

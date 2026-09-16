@@ -87,6 +87,13 @@ export default function OnlineActionPanel() {
               ) : (
                 <div className="text-emerald-400 text-xs font-bold text-center">Properti Maksimal 🏨</div>
               )}
+              
+              <button 
+                onClick={() => useGameStore.getState()._setPhase('end-turn')} 
+                className="w-full py-2.5 rounded-xl font-bold text-sm bg-slate-700 text-white hover:scale-105 active:scale-95 transition-all mt-1"
+              >
+                ➡️ Lanjutkan
+              </button>
             </div>
           );
         }
@@ -97,7 +104,7 @@ export default function OnlineActionPanel() {
       return (
         <div className="flex flex-col gap-2 w-full">
           <div className="text-xs text-red-300 font-bold bg-red-900/50 px-3 py-1.5 rounded-lg border border-red-500/30 text-center">
-            Bayar Sewa: Rp {pendingRent.toLocaleString('id-ID')}
+            {pendingRentOwner === 'bank' ? 'Bayar Pajak / Tagihan' : 'Bayar Sewa'}: Rp {pendingRent.toLocaleString('id-ID')}
           </div>
           {myPlayer.money >= pendingRent ? (
             <button onClick={payRent} className="w-full py-2.5 rounded-xl font-black text-sm bg-red-600 hover:bg-red-500 text-white shadow-lg hover:scale-105 active:scale-95 transition-all">

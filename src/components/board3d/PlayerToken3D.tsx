@@ -123,8 +123,19 @@ export default function PlayerToken3D({ playerId, index, totalPlayers }: { playe
       prevTargetRef.current = player.position;
     }
 
-    // 2. Smoothly lerp the visual position towards the absolute target
-    visualPosRef.current = THREE.MathUtils.lerp(visualPosRef.current, accumPosRef.current, 0.15);
+    // 2. Move the visual position towards the absolute target at a constant speed
+    const diffPos = accumPosRef.current - visualPosRef.current;
+    if (Math.abs(diffPos) > 0.01) {
+      // Kecepatan gerak: 4 kotak per detik (250ms per kotak)
+      const moveSpeed = 4.0 * delta; 
+      if (Math.abs(diffPos) < moveSpeed) {
+        visualPosRef.current = accumPosRef.current;
+      } else {
+        visualPosRef.current += Math.sign(diffPos) * moveSpeed;
+      }
+    } else {
+      visualPosRef.current = accumPosRef.current;
+    }
 
     // 3. Map continuous position to 0-40 grid
     let safePos = visualPosRef.current % 40;

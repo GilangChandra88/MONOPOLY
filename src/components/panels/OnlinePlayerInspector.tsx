@@ -37,7 +37,7 @@ export default function OnlinePlayerInspector() {
   return (
     <div className="w-full bg-slate-900/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-xl p-3 pointer-events-auto flex-shrink-0">
       <div className="text-white/70 font-black text-[10px] mb-2 tracking-widest uppercase">
-        🔍 Inspektur Pemain
+        🏠 PROPERTI
       </div>
       
       {/* Tab/Dropdown Pemain */}

@@ -78,8 +78,6 @@ export function useSyncGameState(user: User | null, sessionId: string | null) {
       currentPlayerIndex: gameState.currentPlayerIndex,
       phase: gameState.phase,
       dice: gameState.dice,
-      diceResultPositions: gameState.diceResultPositions || null,
-      diceResultRotations: gameState.diceResultRotations || null,
       cameraStates: gameState.cameraStates || {},
       doublesCount: gameState.doublesCount,
       ownedProperties: gameState.ownedProperties,
@@ -112,7 +110,7 @@ export function useSyncGameState(user: User | null, sessionId: string | null) {
     const timeoutId = setTimeout(() => {
       setDoc(doc(db, 'games', sessionId), stateToSave, { merge: true }).catch(console.error);
       latestStateRef.current = null; // sudah disave
-    }, 500); // 500ms debounce
+    }, 100); // 100ms debounce (SANGAT CEPAT - bombardir sudah diatasi di engine pergerakan)
 
     return () => {
       clearTimeout(timeoutId);
@@ -126,7 +124,7 @@ export function useSyncGameState(user: User | null, sessionId: string | null) {
   }, [
     user, sessionId, isLoaded, 
     gameState.players, gameState.currentPlayerIndex, gameState.phase, 
-    gameState.dice, gameState.diceResultPositions, gameState.diceResultRotations, gameState.cameraStates, gameState.ownedProperties, gameState.houses, gameState.hotels,
+    gameState.dice, gameState.cameraStates, gameState.ownedProperties, gameState.houses, gameState.hotels,
     gameState.freeParkingMoney, gameState.winner, gameState.pendingRent,
     gameState.activeCard, gameState.sessionName, gameState.history, gameState.chanceDeck, gameState.communityDeck
   ]);

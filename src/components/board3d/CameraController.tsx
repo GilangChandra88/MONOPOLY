@@ -131,20 +131,24 @@ export default function CameraController() {
       );
     } else if (phase === 'dice-result-1' || phase === 'dice-result-2') {
       // Zoom in closely to the actual dice location
-      const dicePositions = useGameStore.getState().diceResultPositions;
+      const dicePositions = useGameStore.getState().localDicePositions;
+      const isD1 = phase === 'dice-result-1';
+      
+      let dicePos = [isD1 ? -2 : 2, 0.5, 0]; // Default fallback (untuk observer yang dadunya diam di tengah)
+      
       if (dicePositions && dicePositions.d1 && dicePositions.d2) {
-        const targetDiceIndex = phase === 'dice-result-1' ? 'd1' : 'd2';
-        const dicePos = dicePositions[targetDiceIndex];
-        
-        // Calculate camera position relative to the dice
-        // (look from slightly above and to the side)
-        const camPos = new THREE.Vector3(dicePos[0], dicePos[1] + 4, dicePos[2] + 4);
-        const target = new THREE.Vector3(dicePos[0], dicePos[1], dicePos[2]);
+        dicePos = isD1 ? dicePositions.d1 : dicePositions.d2;
+      }
+      
+      // Calculate camera position relative to the dice
+      // (look from slightly above and to the side)
+      const camPos = new THREE.Vector3(dicePos[0], dicePos[1] + 4, dicePos[2] + 4);
+      const target = new THREE.Vector3(dicePos[0], dicePos[1], dicePos[2]);
 
-        const currentPos = new THREE.Vector3();
-        const currentTarget = new THREE.Vector3();
-        controlsRef.current.getPosition(currentPos);
-        controlsRef.current.getTarget(currentTarget);
+      const currentPos = new THREE.Vector3();
+      const currentTarget = new THREE.Vector3();
+      controlsRef.current.getPosition(currentPos);
+      controlsRef.current.getTarget(currentTarget);
         
         currentPos.lerp(camPos, 0.1); // lebih cepat lerp-nya agar pindah tepat waktu
         currentTarget.lerp(target, 0.15);
@@ -154,7 +158,6 @@ export default function CameraController() {
           currentTarget.x, currentTarget.y, currentTarget.z,
           false
         );
-      }
     }
   });
 

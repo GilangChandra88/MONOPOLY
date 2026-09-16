@@ -14,9 +14,11 @@ interface PropertyCardProps {
   onClose: () => void;
 }
 
+import { auth } from '../../firebase';
+
 export default function PropertyModal({ squareId, onClose }: PropertyCardProps) {
   const state = useGameStore();
-  const { players, currentPlayerIndex, ownedProperties, houses, hotels, buyHouse, sellHouse, sellProperty } = state;
+  const { players, currentPlayerIndex, ownedProperties, houses, hotels, buyHouse, sellHouse, sellProperty, isOnline } = state;
   const currentPlayer = players[currentPlayerIndex];
   const square = getSquare(squareId);
 
@@ -24,20 +26,27 @@ export default function PropertyModal({ squareId, onClose }: PropertyCardProps) 
 
   const ownerId = ownedProperties[squareId];
   const owner = players.find(p => p.id === ownerId);
-  const isOwner = ownerId === currentPlayer.id;
+  
+  // Dapatkan pemain lokal (diri sendiri)
+  const myPlayer = isOnline 
+    ? players.find(p => p.userId === auth.currentUser?.uid) || players[0]
+    : currentPlayer; // Jika offline, "diri sendiri" adalah pemain yang sedang giliran
+  
+  // Aksi hanya bisa dilakukan jika kitalah pemilik sebenarnya dari properti ini
+  const isMyProperty = ownerId === myPlayer.id;
   const houseCount = houses[squareId] ?? 0;
   const hasHotel = hotels[squareId] ?? false;
 
-  const canBuildHouse = isOwner && isProperty(square) && !hasHotel &&
-    ownsFullColorGroup(currentPlayer.id, square.color, state) &&
-    currentPlayer.money >= square.houseCost && houseCount < 4;
+  const canBuildHouse = isMyProperty && isProperty(square) && !hasHotel &&
+    ownsFullColorGroup(myPlayer.id, square.color, state) &&
+    myPlayer.money >= square.houseCost && houseCount < 4;
 
-  const canBuildHotel = isOwner && isProperty(square) && !hasHotel && houseCount === 4 &&
-    ownsFullColorGroup(currentPlayer.id, square.color, state) &&
-    currentPlayer.money >= square.hotelCost;
+  const canBuildHotel = isMyProperty && isProperty(square) && !hasHotel && houseCount === 4 &&
+    ownsFullColorGroup(myPlayer.id, square.color, state) &&
+    myPlayer.money >= square.hotelCost;
 
-  const canSellHouse = isOwner && (houseCount > 0 || hasHotel);
-  const canSellProperty = isOwner && houseCount === 0 && !hasHotel;
+  const canSellHouse = isMyProperty && (houseCount > 0 || hasHotel);
+  const canSellProperty = isMyProperty && houseCount === 0 && !hasHotel;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -67,9 +76,9 @@ export default function PropertyModal({ squareId, onClose }: PropertyCardProps) 
         <div className="bg-white p-4">
           {/* Status kepemilikan */}
           {owner ? (
-            <div className={`text-center mb-3 py-2 rounded-lg ${isOwner ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            <div className={`text-center mb-3 py-2 rounded-lg ${isMyProperty ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
               <div className="font-bold text-sm">
-                {isOwner ? '✅ Milikmu' : `❌ Milik ${owner.name}`}
+                {isMyProperty ? '✅ Milikmu' : `❌ Milik ${owner.name}`}
               </div>
             </div>
           ) : (
@@ -95,8 +104,8 @@ export default function PropertyModal({ squareId, onClose }: PropertyCardProps) 
                 <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Tabel Sewa</div>
                 {(['Kosong', '1 Rumah', '2 Rumah', '3 Rumah', '4 Rumah', 'Hotel'] as const).map((label, i) => (
                   <div key={i} className={`flex justify-between ${(i === houseCount && !hasHotel) || (i === 5 && hasHotel) ? 'font-bold text-green-600 bg-green-50 px-1 rounded' : ''}`}>
-                    <span className="text-gray-600">{label}{i === 0 && ownsFullColorGroup(currentPlayer.id, square.color, state) ? ' (Monopoli)' : ''}</span>
-                    <span>{fmt(i === 0 && ownsFullColorGroup(currentPlayer.id, square.color, state) ? square.rent[0] * 2 : square.rent[i])}</span>
+                    <span className="text-gray-600">{label}{i === 0 && ownsFullColorGroup(ownerId || '', square.color, state) ? ' (Monopoli)' : ''}</span>
+                    <span>{fmt(i === 0 && ownsFullColorGroup(ownerId || '', square.color, state) ? square.rent[0] * 2 : square.rent[i])}</span>
                   </div>
                 ))}
                 <hr className="my-2" />
@@ -117,7 +126,7 @@ export default function PropertyModal({ squareId, onClose }: PropertyCardProps) 
           </div>
 
           {/* Aksi bangunan (hanya untuk pemilik) */}
-          {isOwner && (
+          {isMyProperty && (
             <div className="flex flex-col gap-2 mb-3">
               <div className="flex gap-2">
                 {(canBuildHouse || canBuildHotel) && (
