@@ -797,6 +797,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
             players: newPlayers,
             freeParkingMoney: 0,
             phase: 'end-turn',
+            lastTransaction: {
+              id: Date.now().toString() + '-fp',
+              amount: state.freeParkingMoney,
+              fromId: 'bank',
+              toId: player.id
+            },
             log: [...get().log, `${player.name} mendapat uang parkir ${fmt(state.freeParkingMoney)}! 🅿️`],
           });
         } else {
