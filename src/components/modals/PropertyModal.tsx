@@ -32,21 +32,24 @@ export default function PropertyModal({ squareId, onClose }: PropertyCardProps) 
     ? players.find(p => p.userId === auth.currentUser?.uid) || players[0]
     : currentPlayer; // Jika offline, "diri sendiri" adalah pemain yang sedang giliran
   
-  // Aksi hanya bisa dilakukan jika kitalah pemilik sebenarnya dari properti ini
+  // Aksi hanya bisa dilakukan jika kitalah pemilik properti ini DAN sedang giliran kita
   const isMyProperty = ownerId === myPlayer.id;
+  const isMyTurn = myPlayer.id === currentPlayer.id;
+  const canDoActions = isMyProperty && isMyTurn;
+  
   const houseCount = houses[squareId] ?? 0;
   const hasHotel = hotels[squareId] ?? false;
 
-  const canBuildHouse = isMyProperty && isProperty(square) && !hasHotel &&
+  const canBuildHouse = canDoActions && isProperty(square) && !hasHotel &&
     ownsFullColorGroup(myPlayer.id, square.color, state) &&
     myPlayer.money >= square.houseCost && houseCount < 4;
 
-  const canBuildHotel = isMyProperty && isProperty(square) && !hasHotel && houseCount === 4 &&
+  const canBuildHotel = canDoActions && isProperty(square) && !hasHotel && houseCount === 4 &&
     ownsFullColorGroup(myPlayer.id, square.color, state) &&
     myPlayer.money >= square.hotelCost;
 
-  const canSellHouse = isMyProperty && (houseCount > 0 || hasHotel);
-  const canSellProperty = isMyProperty && houseCount === 0 && !hasHotel;
+  const canSellHouse = canDoActions && (houseCount > 0 || hasHotel);
+  const canSellProperty = canDoActions && houseCount === 0 && !hasHotel;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">

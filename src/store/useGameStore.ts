@@ -439,6 +439,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const ownerIndex = players.findIndex(p => p.id === ownerId);
     if (ownerIndex === -1) return;
     
+    // STRICT RULE: Hanya bisa membangun di giliran sendiri
+    if (ownerIndex !== state.currentPlayerIndex) return;
+
     const owner = players[ownerIndex];
     const square = BOARD_SQUARES[squareId];
 
@@ -488,6 +491,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const ownerIndex = players.findIndex(p => p.id === ownerId);
     if (ownerIndex === -1) return;
     
+    // STRICT RULE: Hanya bisa jual di giliran sendiri
+    if (ownerIndex !== state.currentPlayerIndex) return;
+    
     const owner = players[ownerIndex];
     const square = BOARD_SQUARES[squareId];
 
@@ -532,6 +538,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     
     const ownerIndex = players.findIndex(p => p.id === ownerId);
     if (ownerIndex === -1) return;
+    
+    // STRICT RULE: Hanya bisa jual di giliran sendiri
+    if (ownerIndex !== state.currentPlayerIndex) return;
     
     const owner = players[ownerIndex];
     const square = BOARD_SQUARES[squareId];
