@@ -461,6 +461,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         lastTransaction: { id: Date.now().toString(), amount: square.hotelCost, fromId: owner.id, toId: 'bank' },
         log: [...state.log, `${owner.name} membangun HOTEL di ${square.name}! 🏨`],
         lastUpdaterId: auth.currentUser?.uid,
+        ...(state.phase === 'action' && state.currentPlayerIndex === ownerIndex ? { phase: 'end-turn' as GamePhase } : {})
       });
     } else {
       if (owner.money < square.houseCost) return;
@@ -473,6 +474,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         lastTransaction: { id: Date.now().toString(), amount: square.houseCost, fromId: owner.id, toId: 'bank' },
         log: [...state.log, `${owner.name} membangun 1 RUMAH di ${square.name}.`],
         lastUpdaterId: auth.currentUser?.uid,
+        ...(state.phase === 'action' && state.currentPlayerIndex === ownerIndex ? { phase: 'end-turn' as GamePhase } : {})
       });
     }
   },
