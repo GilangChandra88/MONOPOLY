@@ -1,7 +1,7 @@
 // ─── Game Engine: Properti ────────────────────────────────────────────────────
 
 import { getSquare, RAILROAD_RENT } from '../data/board';
-import type { GameState, Player } from '../types/game';
+import type { GameState } from '../types/game';
 import { isProperty, isRailroad, isUtility, isPurchasable } from '../types/board';
 
 /**
@@ -98,38 +98,3 @@ export function getPurchasePrice(squareId: number): number {
   return square.price;
 }
 
-/**
- * Cek apakah pemain mampu membeli properti.
- */
-export function canAffordProperty(player: Player, squareId: number): boolean {
-  return player.money >= getPurchasePrice(squareId);
-}
-
-/**
- * Hitung total aset pemain (uang + properti + rumah/hotel).
- */
-export function calculateNetWorth(playerId: string, state: GameState): number {
-  const player = state.players.find(p => p.id === playerId);
-  if (!player) return 0;
-
-  let total = player.money;
-
-  for (const sqId of player.properties) {
-    const sq = getSquare(sqId);
-    if (!isPurchasable(sq)) continue;
-
-    // Nilai hipotek
-    total += sq.mortgage;
-
-    // Nilai bangunan
-    if (isProperty(sq)) {
-      const houses = state.houses[sqId] ?? 0;
-      const hasHotel = state.hotels[sqId] ?? false;
-      total += hasHotel
-        ? (sq.hotelCost / 2) // nilai jual setengah harga
-        : houses * (sq.houseCost / 2);
-    }
-  }
-
-  return total;
-}

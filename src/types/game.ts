@@ -66,8 +66,6 @@ export interface GameState {
   activeInviteCodes?: string[];
   turnVersion: number;       // dinaikkan tiap endTurn — kunci anti race condition
   dice: [number, number];
-  diceResultPositions?: { d1: [number, number, number], d2: [number, number, number] } | null;
-  diceResultRotations?: { d1: [number, number, number, number], d2: [number, number, number, number] } | null;
   cameraStates?: Record<string, { pos: [number, number, number], target: [number, number, number] }>;
   history?: any[];          // Riwayat untuk undo
   doublesCount: number;     // berapa kali kembar berturut-turut
@@ -103,6 +101,4 @@ export interface UIState {
   openModal: ModalType;
   selectedSquareId: number | null;
   showLog: boolean;
-  animatingDice: boolean;
-  movingPlayerId: string | null;
 }

@@ -19,13 +19,6 @@ export function sendToJail(player: Player): Player {
 }
 
 /**
- * Cek apakah pemain bisa keluar penjara (punya kartu atau bayar).
- */
-export function canPayJailFine(player: Player): boolean {
-  return player.money >= JAIL_FINE;
-}
-
-/**
  * Bayar denda untuk keluar penjara.
  */
 export function payJailFine(player: Player): Player {

@@ -2,7 +2,7 @@
 
 import type { Card } from '../types/card';
 import type { GameState } from '../types/game';
-import { findNearestRailroad, findNearestUtility, moveToPosition, calculateNewPosition, applyGoBonus } from './movement';
+import { findNearestRailroad, findNearestUtility, applyGoBonus } from './movement';
 import { sendToJail } from './jail';
 import { getSquare } from '../data/board';
 import { isProperty } from '../types/board';

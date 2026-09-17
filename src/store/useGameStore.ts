@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type { GameState, Player, GamePhase, TokenColor } from '../types/game';
 import { auth } from '../firebase';
 import { rollDice, isDoubles, diceTotal } from '../engine/dice';
-import { calculateNewPosition, applyGoBonus } from '../engine/movement';
+import { applyGoBonus } from '../engine/movement';
 import { calculateRent, getPurchasePrice } from '../engine/property';
 import { sendToJail, payJailFine, useJailCard, failJailAttempt } from '../engine/jail';
 import { applyCardEffect } from '../engine/cards';
@@ -687,8 +687,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       currentPlayerIndex: s.currentPlayerIndex,
       phase: s.phase,
       dice: s.dice,
-      diceResultPositions: s.diceResultPositions,
-      diceResultRotations: s.diceResultRotations,
       doublesCount: s.doublesCount,
       ownedProperties: s.ownedProperties,
       houses: s.houses,

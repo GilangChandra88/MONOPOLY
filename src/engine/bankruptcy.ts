@@ -74,11 +74,3 @@ export function processBankruptcy(
     ],
   };
 }
-
-/**
- * Temukan pemenang jika sudah ada.
- */
-export function checkWinner(state: GameState): string | null {
-  const activePlayers = state.players.filter(p => !p.isBankrupt);
-  return activePlayers.length === 1 ? activePlayers[0].id : null;
-}

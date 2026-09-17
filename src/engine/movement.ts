@@ -6,37 +6,6 @@ import type { Player } from '../types/game';
 export const BOARD_SIZE = 40;
 
 /**
- * Hitung posisi baru setelah bergerak sejumlah langkah.
- * Mengembalikan posisi baru dan apakah melewati GO.
- */
-export function calculateNewPosition(
-  currentPosition: number,
-  steps: number
-): { newPosition: number; passedGo: boolean } {
-  let newPosition = (currentPosition + steps) % BOARD_SIZE;
-  if (newPosition < 0) newPosition += BOARD_SIZE;
-
-  const passedGo =
-    steps > 0 &&
-    newPosition <= currentPosition &&
-    currentPosition !== 0;
-
-  return { newPosition, passedGo };
-}
-
-/**
- * Bergerak langsung ke posisi tertentu (misalnya dari kartu).
- * Mengembalikan apakah melewati GO.
- */
-export function moveToPosition(
-  currentPosition: number,
-  targetPosition: number
-): { passedGo: boolean } {
-  const passedGo = targetPosition < currentPosition && currentPosition !== targetPosition;
-  return { passedGo };
-}
-
-/**
  * Temukan stasiun kereta terdekat dari posisi saat ini.
  */
 export function findNearestRailroad(position: number): number {
