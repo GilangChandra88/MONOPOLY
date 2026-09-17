@@ -75,7 +75,7 @@ function FloatingAnim({ children, floatSpeed = 2, floatHeight = 0.1, spinSpeed =
 }
 
 // Custom hook untuk membuat tekstur dari teks (sangat stabil, anti Z-fighting/Frustum Culling)
-function useTextTexture(name: string, rentStr: string | null, ownerId: string | null) {
+function useTextTexture(name: string, rentStr: string | null, ownerId: string | null, rentColor?: string) {
   const [texture, setTexture] = React.useState<THREE.CanvasTexture | null>(null);
 
   React.useEffect(() => {
@@ -106,7 +106,8 @@ function useTextTexture(name: string, rentStr: string | null, ownerId: string | 
     drawText(name, 256, 256, 50, 'white');
 
     if (rentStr) {
-      drawText(rentStr, 256, 422, 45, ownerId ? '#ef4444' : '#86efac');
+      const defaultColor = ownerId ? '#ef4444' : '#86efac';
+      drawText(rentStr, 256, 422, 45, rentColor || defaultColor);
     }
 
     const tex = new THREE.CanvasTexture(canvas);
@@ -338,15 +339,22 @@ export default function Square3D({ id }: { id: number }) {
 
   const tex = useSafeTexture(sq.image);
   
-  const rentText = (() => {
-    if (!isPurchasable(sq)) return null;
-    if (ownerId) return rentString;
+  const fpMoney = useGameStore(s => sq.type === 'free-parking' ? s.freeParkingMoney : 0);
+
+  const { rentText, rentColor } = (() => {
+    if (sq.type === 'free-parking') {
+      if (fpMoney === 0) return { rentText: 'Terkumpul: 0', rentColor: '#fbbf24' };
+      const fmt = fpMoney >= 1_000_000 ? `${(fpMoney / 1_000_000).toFixed(1)}M` : `${fpMoney / 1_000}K`;
+      return { rentText: `Terkumpul: Rp ${fmt}`, rentColor: '#fbbf24' };
+    }
+    if (!isPurchasable(sq)) return { rentText: null, rentColor: undefined };
+    if (ownerId) return { rentText: rentString, rentColor: undefined };
     const price = sq.price;
     const fmt = price >= 1_000_000 ? `${(price / 1_000_000).toFixed(1)}M` : `${price / 1_000}K`;
-    return `Harga: Rp ${fmt}`;
+    return { rentText: `Harga: Rp ${fmt}`, rentColor: undefined };
   })();
 
-  const textTex = useTextTexture(sq.name, rentText, ownerId);
+  const textTex = useTextTexture(sq.name, rentText, ownerId, rentColor);
 
   return (
     <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
