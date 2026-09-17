@@ -1,16 +1,33 @@
+﻿// ─── useSyncGameState ─────────────────────────────────────────────────────────
+// Hook untuk sinkronisasi state game dengan Firestore.
+//
+// ARSITEKTUR BARU:
+//  - Upload hanya dilakukan EKSPLISIT via uploadTurnState() dari action-action kunci.
+//  - Tidak ada lagi reactive useEffect yang memantau 14 dependencies.
+//  - onSnapshot hanya merge field PERMANEN (turn state), bukan seluruh state lokal.
+//  - turnVersion digunakan untuk mencegah echo dari diri sendiri & race condition.
+
 import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { db } from '../firebase';
-import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 
+// Field TURN STATE yang disinkronisasi antar pemain.
+// Field ephemeral (localDicePositions, history, movementSteps, cameraStates) TIDAK disini.
+const TURN_STATE_FIELDS = [
+  'players', 'currentPlayerIndex', 'phase', 'dice', 'doublesCount',
+  'ownedProperties', 'houses', 'hotels', 'freeParkingMoney', 'log',
+  'winner', 'pendingRent', 'pendingRentOwner', 'activeCard', 'activeCardType',
+  'chanceDeck', 'communityDeck', 'isOnline', 'activeInviteCodes',
+  'physicsRollTrigger', 'turnVersion', 'sessionName',
+] as const;
+
 export function useSyncGameState(user: User | null, sessionId: string | null) {
-  const gameState = useGameStore();
   const [isLoaded, setIsLoaded] = useState(false);
   const isHydrating = useRef(true);
-  const prevActiveId = useRef<string | null>(null);
 
-  // 1. Muat data awal saat sessionId diberikan
+  // Muat data awal & pantau perubahan dari pemain lain via onSnapshot
   useEffect(() => {
     if (!user || !sessionId) {
       setIsLoaded(false);
@@ -22,117 +39,67 @@ export function useSyncGameState(user: User | null, sessionId: string | null) {
     setIsLoaded(false);
 
     const gameDocRef = doc(db, 'games', sessionId);
-    
-    const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data && data.players && data.players.length > 0) {
-          const { creatorId, sessionName, updatedAt, createdAt, historyStr, history, ...restState } = data;
-          
-          let parsedHistory = [];
-          if (historyStr) {
-            try { parsedHistory = JSON.parse(historyStr); } catch (e) {}
-          } else if (history) {
-            parsedHistory = history; // fallback jika sebelumnya ada array
-          }
 
-          if (isHydrating.current) {
-            // Restore data saat awal load
-            useGameStore.setState({ ...restState, history: parsedHistory } as any);
-          } else {
-            // Terapkan perubahan dari pemain lain secara real-time!
-            if (data.lastWriter && data.lastWriter !== user.uid) {
-              useGameStore.setState({ ...restState, history: parsedHistory } as any);
-            }
-          }
+    const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
+      if (!docSnap.exists()) {
+        setIsLoaded(true);
+        isHydrating.current = false;
+        return;
+      }
+
+      const data = docSnap.data();
+      if (!data || !data.players || data.players.length === 0) {
+        setIsLoaded(true);
+        isHydrating.current = false;
+        return;
+      }
+
+      // ── Hydration awal: restore semua state dari DB ──────────────────────
+      if (isHydrating.current) {
+        const { creatorId, updatedAt, createdAt, historyStr, history, lastWriter, ...restState } = data;
+
+        let parsedHistory: any[] = [];
+        if (historyStr) {
+          try { parsedHistory = JSON.parse(historyStr); } catch (_) {}
+        } else if (history) {
+          parsedHistory = history;
+        }
+
+        useGameStore.setState({ ...restState, history: parsedHistory } as any);
+        setIsLoaded(true);
+        isHydrating.current = false;
+        return;
+      }
+
+      // ── Update real-time dari pemain LAIN ────────────────────────────────
+      // Abaikan echo dari diri sendiri
+      if (data.lastWriter && data.lastWriter === user.uid) return;
+
+      // Ambil hanya TURN STATE — jangan override state lokal (history, dice position, dll)
+      const patch: Record<string, any> = {};
+      for (const field of TURN_STATE_FIELDS) {
+        if (data[field] !== undefined) {
+          patch[field] = data[field];
         }
       }
-      setIsLoaded(true);
-      isHydrating.current = false;
+
+      // Juga restore history jika ada
+      if (data.historyStr) {
+        try { patch.history = JSON.parse(data.historyStr); } catch (_) {}
+      }
+
+      if (Object.keys(patch).length > 0) {
+        useGameStore.setState(patch as any);
+      }
+
     }, (error) => {
-      console.error("Gagal memuat data sesi:", error);
+      console.error('[useSyncGameState] Gagal memuat data sesi:', error);
       setIsLoaded(true);
       isHydrating.current = false;
     });
 
     return () => unsubscribe();
   }, [user, sessionId]);
-
-  // Ref untuk menyimpan state terbaru agar bisa disave instan saat unmount/keluar
-  const latestStateRef = useRef<any>(null);
-
-  // 2. Simpan setiap ada perubahan state (Debounced)
-  useEffect(() => {
-    if (!user || !sessionId || !isLoaded || isHydrating.current) return;
-
-    // HANYA simpan ke Firebase jika:
-    // 1. Ini giliran kita, ATAU
-    // 2. Kita baru saja mengakhiri giliran (prevActiveId === kita), ATAU
-    // 3. Kita melakukan aksi di luar giliran (menjual properti, dsb) sehingga lastUpdaterId === kita
-    const currentActiveId = gameState.players[gameState.currentPlayerIndex]?.userId;
-    const isMyTurn = !gameState.isOnline || currentActiveId === user.uid || prevActiveId.current === user.uid;
-    const isMyOutTurnAction = gameState.lastUpdaterId === user.uid;
-    
-    prevActiveId.current = currentActiveId || null;
-
-    if (!isMyTurn && !isMyOutTurnAction) return;
-
-    const stateToSave = {
-      players: gameState.players,
-      currentPlayerIndex: gameState.currentPlayerIndex,
-      phase: gameState.phase,
-      dice: gameState.dice,
-      cameraStates: gameState.cameraStates || {},
-      doublesCount: gameState.doublesCount,
-      ownedProperties: gameState.ownedProperties,
-      houses: gameState.houses,
-      hotels: gameState.hotels,
-      freeParkingMoney: gameState.freeParkingMoney,
-      log: gameState.log.slice(-50), // simpan 50 log terakhir
-      winner: gameState.winner,
-      pendingRent: gameState.pendingRent,
-      pendingRentOwner: gameState.pendingRentOwner,
-      activeCard: gameState.activeCard,
-      activeCardType: gameState.activeCardType,
-      chanceDeck: gameState.chanceDeck || [],
-      communityDeck: gameState.communityDeck || [],
-      historyStr: JSON.stringify(gameState.history || []),
-      isOnline: gameState.isOnline,
-      activeInviteCodes: gameState.activeInviteCodes,
-      physicsRollTrigger: gameState.physicsRollTrigger,
-      lastUpdaterId: gameState.lastUpdaterId || null,
-      
-      // Metadata Sesi
-      creatorId: user.uid,
-      lastWriter: user.uid,
-      participantIds: gameState.players.map(p => p.userId).filter(Boolean),
-      sessionName: gameState.sessionName || `Sesi Game`,
-      updatedAt: serverTimestamp(),
-    };
-
-    latestStateRef.current = stateToSave;
-
-    const timeoutId = setTimeout(() => {
-      setDoc(doc(db, 'games', sessionId), stateToSave, { merge: true }).catch(console.error);
-      latestStateRef.current = null; // sudah disave
-    }, 100); // 100ms debounce (SANGAT CEPAT - bombardir sudah diatasi di engine pergerakan)
-
-    return () => {
-      clearTimeout(timeoutId);
-      // Jika komponen unmount atau dependencies berubah sebelum 500ms (misal user klik "Ke Lobby"),
-      // kita harus segera simpan (flush) agar progress terakhir tidak hilang!
-      if (latestStateRef.current) {
-        setDoc(doc(db, 'games', sessionId), latestStateRef.current, { merge: true }).catch(console.error);
-        latestStateRef.current = null;
-      }
-    };
-  }, [
-    user, sessionId, isLoaded, 
-    gameState.players, gameState.currentPlayerIndex, gameState.phase, 
-    gameState.dice, gameState.cameraStates, gameState.ownedProperties, gameState.houses, gameState.hotels,
-    gameState.freeParkingMoney, gameState.winner, gameState.pendingRent,
-    gameState.activeCard, gameState.sessionName, gameState.history, gameState.chanceDeck, gameState.communityDeck
-  ]);
 
   return { isLoaded };
 }

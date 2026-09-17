@@ -12,6 +12,7 @@ import { processBankruptcy } from '../engine/bankruptcy';
 import { BOARD_SQUARES, GO_MONEY, INCOME_TAX_AMOUNT, LUXURY_TAX_AMOUNT } from '../data/board';
 import { CHANCE_CARDS, COMMUNITY_CHEST_CARDS, shuffleDeck } from '../data/cards';
 import { isPurchasable, isProperty } from '../types/board';
+import { uploadTurnState } from '../hooks/syncUtils';
 
 const STARTING_MONEY = 15_000_000; // Rp 15 juta
 
@@ -55,6 +56,7 @@ function createInitialState(players: Player[]): GameState {
     pendingRentOwner: null,
     movementSteps: 0,
     movementDirection: 1,
+    turnVersion: 0,
   };
 }
 
@@ -377,6 +379,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       phase: 'end-turn',
       log: [...state.log, `${player.name} membeli ${square.name} seharga ${fmt(price)} 🏠`],
     });
+    uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
   },
 
   passProperty: () => {
@@ -427,6 +430,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     set(finalState as GameStore);
+    uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
   },
 
   // ── Beli Rumah ─────────────────────────────────────────────────────────────
@@ -463,9 +467,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         hotels: { ...state.hotels, [squareId]: true },
         lastTransaction: { id: Date.now().toString(), amount: square.hotelCost, fromId: owner.id, toId: 'bank' },
         log: [...state.log, `${owner.name} membangun HOTEL di ${square.name}! 🏨`],
-        lastUpdaterId: auth.currentUser?.uid,
         ...(state.phase === 'action' && state.currentPlayerIndex === ownerIndex ? { phase: 'end-turn' as GamePhase } : {})
       });
+      uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
     } else {
       if (owner.money < square.houseCost) return;
       state._pushHistory();
@@ -476,9 +480,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         houses: { ...state.houses, [squareId]: houses + 1 },
         lastTransaction: { id: Date.now().toString(), amount: square.houseCost, fromId: owner.id, toId: 'bank' },
         log: [...state.log, `${owner.name} membangun 1 RUMAH di ${square.name}.`],
-        lastUpdaterId: auth.currentUser?.uid,
         ...(state.phase === 'action' && state.currentPlayerIndex === ownerIndex ? { phase: 'end-turn' as GamePhase } : {})
       });
+      uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
     }
   },
 
@@ -513,8 +517,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         hotels: newHotels,
         houses: { ...state.houses, [squareId]: 4 },
         log: [...state.log, `${owner.name} menjual hotel di ${square.name} seharga ${fmt(salePrice)}.`],
-        lastUpdaterId: auth.currentUser?.uid,
       });
+      uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
     } else if (houses > 0) {
       const salePrice = square.houseCost / 2;
       const newPlayers = [...players];
@@ -523,8 +527,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         players: newPlayers,
         houses: { ...state.houses, [squareId]: houses - 1 },
         log: [...state.log, `${owner.name} menjual 1 rumah di ${square.name} seharga ${fmt(salePrice)}.`],
-        lastUpdaterId: auth.currentUser?.uid,
       });
+      uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
     }
   },
 
@@ -564,8 +568,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       players: newPlayers,
       ownedProperties: newOwned,
       log: [...state.log, `${owner.name} menjual ${square.name} ke bank seharga ${fmt(salePrice)}.`],
-      lastUpdaterId: auth.currentUser?.uid,
     });
+    uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
   },
 
   declareBankruptcy: () => {
@@ -575,14 +579,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     
     // Jika tidak ada pendingRentOwner, bangkrut ke bank
     const bankruptedState = processBankruptcy(player.id, pendingRentOwner || 'bank', state);
+    const newVersion = (state.turnVersion ?? 0) + 1;
     
     set({
       ...bankruptedState,
       pendingRent: null,
       pendingRentOwner: null,
       phase: bankruptedState.winner ? 'end-turn' : 'end-turn',
-      lastUpdaterId: auth.currentUser?.uid,
+      turnVersion: newVersion,
     });
+    uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
   },
 
   // ── Penjara ────────────────────────────────────────────────────────────────
@@ -602,6 +608,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       freeParkingMoney: state.freeParkingMoney + 500_000,
       log: [...state.log, `${player.name} membayar denda ${fmt(500_000)} untuk keluar penjara.`],
     });
+    uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
   },
 
   useJailCardAction: () => {
@@ -619,6 +626,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       phase: 'idle',
       log: [...state.log, `${player.name} menggunakan kartu BEBAS PENJARA!`],
     });
+    uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
   },
 
   // ── Kartu ──────────────────────────────────────────────────────────────────
@@ -659,6 +667,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Jika tidak memindahkan pemain, giliran selesai atau bisa lanjut aksi lain
     set({ phase: 'end-turn' });
+    uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
   },
 
   saveCameraState: (userId: string, pos: [number, number, number], target: [number, number, number]) => {
@@ -727,6 +736,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         phase: 'idle',
         log: [...state.log, `🎲 ${player.name} dapat giliran tambahan karena dadu kembar!`],
       });
+      // Upload sinyal "giliran lagi" ke Firebase
+      const uid = auth.currentUser?.uid;
+      uploadTurnState(get(), get().sessionId, uid);
       return;
     }
 
@@ -736,12 +748,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       nextIdx = (nextIdx + 1) % players.length;
     }
 
+    const newVersion = (state.turnVersion ?? 0) + 1;
     set({
       currentPlayerIndex: nextIdx,
       phase: 'idle',
       doublesCount: 0,
+      turnVersion: newVersion,
       log: [...state.log, `─── Giliran ${players[nextIdx].name} ───`],
     });
+
+    // Upload TURN STATE ke Firebase — satu-satunya tempat upload reguler
+    const uid = auth.currentUser?.uid;
+    uploadTurnState(get(), get().sessionId, uid);
   },
 
   recoverStuckSession: () => {
@@ -805,6 +823,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             },
             log: [...get().log, `${player.name} mendapat uang parkir ${fmt(state.freeParkingMoney)}! 🅿️`],
           });
+          uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
         } else {
           set({ phase: 'end-turn' });
         }
