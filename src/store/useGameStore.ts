@@ -460,6 +460,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         hotels: { ...state.hotels, [squareId]: true },
         lastTransaction: { id: Date.now().toString(), amount: square.hotelCost, fromId: owner.id, toId: 'bank' },
         log: [...state.log, `${owner.name} membangun HOTEL di ${square.name}! 🏨`],
+        lastUpdaterId: auth.currentUser?.uid,
       });
     } else {
       if (owner.money < square.houseCost) return;
@@ -471,6 +472,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         houses: { ...state.houses, [squareId]: houses + 1 },
         lastTransaction: { id: Date.now().toString(), amount: square.houseCost, fromId: owner.id, toId: 'bank' },
         log: [...state.log, `${owner.name} membangun 1 RUMAH di ${square.name}.`],
+        lastUpdaterId: auth.currentUser?.uid,
       });
     }
   },
@@ -503,6 +505,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         hotels: newHotels,
         houses: { ...state.houses, [squareId]: 4 },
         log: [...state.log, `${owner.name} menjual hotel di ${square.name} seharga ${fmt(salePrice)}.`],
+        lastUpdaterId: auth.currentUser?.uid,
       });
     } else if (houses > 0) {
       const salePrice = square.houseCost / 2;
@@ -512,6 +515,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         players: newPlayers,
         houses: { ...state.houses, [squareId]: houses - 1 },
         log: [...state.log, `${owner.name} menjual 1 rumah di ${square.name} seharga ${fmt(salePrice)}.`],
+        lastUpdaterId: auth.currentUser?.uid,
       });
     }
   },
@@ -548,7 +552,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       players: newPlayers,
       ownedProperties: newOwned,
-      log: [...state.log, `${owner.name} menjual ${square.name} ke bank seharga ${fmt(salePrice)}.`]
+      log: [...state.log, `${owner.name} menjual ${square.name} ke bank seharga ${fmt(salePrice)}.`],
+      lastUpdaterId: auth.currentUser?.uid,
     });
   },
 
@@ -564,7 +569,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ...bankruptedState,
       pendingRent: null,
       pendingRentOwner: null,
-      phase: bankruptedState.winner ? 'end-turn' : 'end-turn'
+      phase: bankruptedState.winner ? 'end-turn' : 'end-turn',
+      lastUpdaterId: auth.currentUser?.uid,
     });
   },
 

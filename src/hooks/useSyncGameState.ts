@@ -65,13 +65,17 @@ export function useSyncGameState(user: User | null, sessionId: string | null) {
   useEffect(() => {
     if (!user || !sessionId || !isLoaded || isHydrating.current) return;
 
-    // HANYA simpan ke Firebase jika giliran kita, ATAU jika kita baru saja mengakhiri giliran
+    // HANYA simpan ke Firebase jika:
+    // 1. Ini giliran kita, ATAU
+    // 2. Kita baru saja mengakhiri giliran (prevActiveId === kita), ATAU
+    // 3. Kita melakukan aksi di luar giliran (menjual properti, dsb) sehingga lastUpdaterId === kita
     const currentActiveId = gameState.players[gameState.currentPlayerIndex]?.userId;
-    const isMe = !gameState.isOnline || currentActiveId === user.uid || prevActiveId.current === user.uid;
+    const isMyTurn = !gameState.isOnline || currentActiveId === user.uid || prevActiveId.current === user.uid;
+    const isMyOutTurnAction = gameState.lastUpdaterId === user.uid;
     
     prevActiveId.current = currentActiveId || null;
 
-    if (!isMe) return;
+    if (!isMyTurn && !isMyOutTurnAction) return;
 
     const stateToSave = {
       players: gameState.players,
@@ -96,6 +100,7 @@ export function useSyncGameState(user: User | null, sessionId: string | null) {
       isOnline: gameState.isOnline,
       activeInviteCodes: gameState.activeInviteCodes,
       physicsRollTrigger: gameState.physicsRollTrigger,
+      lastUpdaterId: gameState.lastUpdaterId || null,
       
       // Metadata Sesi
       creatorId: user.uid,

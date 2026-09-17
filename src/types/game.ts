@@ -64,6 +64,7 @@ export interface GameState {
   phase: GamePhase;
   isOnline?: boolean;
   activeInviteCodes?: string[];
+  lastUpdaterId?: string | null;
   dice: [number, number];
   diceResultPositions?: { d1: [number, number, number], d2: [number, number, number] } | null;
   diceResultRotations?: { d1: [number, number, number, number], d2: [number, number, number, number] } | null;
