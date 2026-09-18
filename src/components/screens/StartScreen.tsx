@@ -4,7 +4,7 @@ import { useGameStore } from '../../store/useGameStore';
 import { TOKEN_COLORS, TOKEN_EMOJIS, TOKEN_BG } from '../../types/game';
 import type { TokenColor } from '../../types/game';
 import { db, auth } from '../../firebase';
-import { doc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface PlayerConfig {
   name: string;
@@ -44,21 +44,57 @@ export default function StartScreen({ onCancel }: StartScreenProps) {
     setConfigs(updated);
   }
 
-  function handleStart() {
+  async function handleStart() {
     const validConfigs = configs.slice(0, playerCount).map(c => ({
       name: c.name.trim() || `Pemain ${configs.indexOf(c) + 1}`,
       color: c.color,
     }));
     
     // Generate new session ID using Firebase doc ref
-    const newSessionRef = doc(db, 'games', 'placeholder').parent; // Get collection ref
+    const newSessionRef = doc(db, 'games', 'placeholder').parent;
     const newDoc = doc(newSessionRef);
     const generatedId = newDoc.id;
     
     const finalSessionName = sessionName.trim() || `Sesi Game ${new Date().toLocaleDateString('id-ID')}`;
     
+    // Setup state lokal
     setupGame(validConfigs, isOnline, auth.currentUser?.uid);
     setSessionInfo(generatedId, finalSessionName);
+
+    // Jika online: langsung upload ke Firebase agar kode undangan tersedia
+    // sebelum pemain lain mencoba join. (uploadTurnState di store butuh sessionId
+    // yang baru saja di-set, jadi kita ambil state terbaru via getState())
+    if (isOnline && auth.currentUser) {
+      const latestState = useGameStore.getState();
+      const payload = {
+        players: latestState.players,
+        currentPlayerIndex: latestState.currentPlayerIndex,
+        phase: latestState.phase,
+        dice: latestState.dice,
+        doublesCount: latestState.doublesCount,
+        ownedProperties: latestState.ownedProperties,
+        houses: latestState.houses,
+        hotels: latestState.hotels,
+        freeParkingMoney: latestState.freeParkingMoney,
+        log: latestState.log,
+        winner: latestState.winner,
+        pendingRent: latestState.pendingRent,
+        pendingRentOwner: latestState.pendingRentOwner,
+        activeCard: latestState.activeCard,
+        activeCardType: latestState.activeCardType,
+        chanceDeck: latestState.chanceDeck || [],
+        communityDeck: latestState.communityDeck || [],
+        isOnline: true,
+        activeInviteCodes: latestState.activeInviteCodes || [],
+        turnVersion: latestState.turnVersion,
+        sessionName: finalSessionName,
+        creatorId: auth.currentUser.uid,
+        participantIds: [auth.currentUser.uid],
+        lastWriter: auth.currentUser.uid,
+        updatedAt: serverTimestamp(),
+      };
+      await setDoc(doc(db, 'games', generatedId), payload);
+    }
   }
 
   return (
