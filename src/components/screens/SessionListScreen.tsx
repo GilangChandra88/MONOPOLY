@@ -107,7 +107,11 @@ export default function SessionListScreen({ user, onSelectSession, onCreateNew, 
       }
 
       const rtdbData = rtdbSnap.val();
-      const players: any[] = rtdbData.players || [];
+      // RTDB bisa mengembalikan array ATAU object dengan numeric keys
+      const rawPlayers = rtdbData.players || [];
+      const players: any[] = Array.isArray(rawPlayers) 
+        ? rawPlayers 
+        : Object.keys(rawPlayers).sort().map(k => rawPlayers[k]);
 
       // 3. Temukan slot pemain dengan kode ini
       const playerIndex = players.findIndex((p: any) => p.inviteCode === code);
@@ -117,9 +121,13 @@ export default function SessionListScreen({ user, onSelectSession, onCreateNew, 
         return;
       }
 
-      // 4. Update RTDB — set userId pada slot pemain yang join
-      const updatedPlayer = { ...players[playerIndex], userId: user.uid, inviteCode: null };
-      await update(ref(rtdb, `games/${sessionId}/players/${playerIndex}`), updatedPlayer);
+      // 4. Update RTDB — set userId pada slot pemain yang join DAN set lastWriter
+      // agar pemain 1 menerima update ini (tidak diabaikan sebagai echo).
+      await update(ref(rtdb, `games/${sessionId}`), {
+        [`players/${playerIndex}/userId`]: user.uid,
+        [`players/${playerIndex}/inviteCode`]: null,
+        lastWriter: user.uid
+      });
 
       // 5. Update Firestore metadata — hapus kode dari activeInviteCodes, tambah ke participantIds
       const newActiveCodes = (gameMetadata.activeInviteCodes || []).filter((c: string) => c !== code);
