@@ -357,11 +357,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const { players, currentPlayerIndex } = state;
     const player = players[currentPlayerIndex];
-    const square = BOARD_SQUARES[player.position];
+    const square = BOARD_SQUARES[Number(player.position)];
 
-    if (!isPurchasable(square)) return;
+    if (!square || !isPurchasable(square)) return;
 
-    const price = getPurchasePrice(player.position);
+    const price = getPurchasePrice(Number(player.position));
     if (player.money < price) return;
 
     state._pushHistory();
@@ -370,14 +370,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     newPlayers[currentPlayerIndex] = {
       ...player,
       money: player.money - price,
-      properties: [...player.properties, player.position],
+      properties: [...(player.properties || []), Number(player.position)],
     };
 
     set({
       players: newPlayers,
-      ownedProperties: { ...state.ownedProperties, [player.position]: player.id },
+      ownedProperties: { ...(state.ownedProperties || {}), [Number(player.position)]: player.id },
       phase: 'end-turn',
-      log: [...state.log, `${player.name} membeli ${square.name} seharga ${fmt(price)} 🏠`],
+      log: [...(state.log || []), `${player.name} membeli ${square.name} seharga ${fmt(price)} 🏠`],
     });
     uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
   },
@@ -385,7 +385,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   passProperty: () => {
     const state = get();
     state._pushHistory();
-    set({ phase: 'end-turn', log: [...state.log, `${state.players[state.currentPlayerIndex].name} memilih tidak membeli properti.`] });
+    set({ phase: 'end-turn', log: [...(state.log || []), `${state.players[state.currentPlayerIndex].name} memilih tidak membeli properti.`] });
+    uploadTurnState(get(), get().sessionId, auth.currentUser?.uid);
   },
 
   // ── Bayar Sewa ─────────────────────────────────────────────────────────────
