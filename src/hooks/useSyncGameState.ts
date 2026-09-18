@@ -1,4 +1,4 @@
-﻿// --- useSyncGameState -------------------------------------------------------
+// --- useSyncGameState -------------------------------------------------------
 // Hook sinkronisasi state game dengan Firebase Realtime Database (RTDB).
 //
 // PENTING: RTDB menyimpan array sebagai object dengan numeric keys.
@@ -18,6 +18,7 @@ const TURN_STATE_FIELDS = [
   'winner', 'pendingRent', 'pendingRentOwner', 'activeCard', 'activeCardType',
   'chanceDeck', 'communityDeck', 'isOnline', 'activeInviteCodes',
   'physicsRollTrigger', 'turnVersion', 'sessionName',
+  'movementSteps', 'movementDirection', 'localDicePositions'
 ] as const;
 
 // Field yang harus berupa ARRAY (RTDB mengembalikan object dengan numeric keys)

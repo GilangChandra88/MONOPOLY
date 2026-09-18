@@ -134,6 +134,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setIsDraggingDice: (val) => set({ isDraggingDice: val }),
 
   physicsRollTrigger: 0,
+  _sync: () => {
+    const s = get();
+    if (s.isOnline) {
+      uploadTurnState(s, s.sessionId, auth.currentUser?.uid);
+    }
+  },
   triggerPhysicalRoll: () => {
     set(s => ({ physicsRollTrigger: Date.now() }));
     get().rollDiceAction();
@@ -194,6 +200,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (state.phase !== 'idle') return;
     state._pushHistory();
     set({ phase: 'rolling' });
+    get()._sync();
   },
 
   // Dipanggil oleh komponen fisika setelah dadu benar-benar berhenti
@@ -211,16 +218,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
       localDicePositions: dicePositions || null,
       phase: 'dice-result-1' 
     });
+    get()._sync();
     
     // Sequence Kamera:
     // 1. Fokus Dadu 1 (sekarang, diam 1 detik)
     setTimeout(() => {
       // 2. Fokus Dadu 2 (diam 1 detik)
       set({ phase: 'dice-result-2' });
+      get()._sync();
       
       setTimeout(() => {
         // 3. Pindah ke pre-moving (fokus karakter, diam 1 detik)
         set({ phase: 'pre-moving' });
+        get()._sync();
 
         setTimeout(() => {
           // 4. Lanjutkan logika movement (ini akan mengubah phase menjadi 'moving' atau lainnya)
@@ -249,11 +259,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         set({
           doublesCount: 0, // tidak dapet giliran tambahan setelah bebas dari penjara
           players: newPlayers,
-          phase: 'moving',
-          movementSteps: total,
-          movementDirection: 1,
           log: [...state.log, `${player.name} melempar dadu kembar (${dice[0]}+${dice[1]}) dan keluar dari penjara!`],
         });
+        get()._executeInstantMovement(newPlayers[currentPlayerIndex], total, 1);
         return;
       } else {
         // Gagal keluar penjara
@@ -267,11 +275,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
           set({
             players: newPlayers,
-            phase: 'moving',
-            movementSteps: total,
-            movementDirection: 1,
             log: [...state.log, `${player.name} giliran ke-3 di penjara, terpaksa bayar denda ${fmt(500_000)}.`],
           });
+          get()._executeInstantMovement(newPlayers[currentPlayerIndex], total, 1);
         } else {
           newPlayers[currentPlayerIndex] = updatedPlayer;
           set({
@@ -279,6 +285,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             phase: 'end-turn',
             log: [...state.log, `${player.name} gagal keluar penjara (dadu: ${dice[0]}+${dice[1]}). Giliran di penjara: ${updatedPlayer.jailTurns}/${3}`],
           });
+          get()._sync();
         }
         return;
       }
@@ -295,6 +302,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         phase: 'end-turn',
         log: [...state.log, `${player.name} melempar dadu kembar 3x berturut-turut → masuk penjara!`],
       });
+      get()._sync();
       return;
     }
 
@@ -340,11 +348,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       log: newLog,
       lastTransaction: newTransaction
     });
+    get()._sync();
 
     // Tunggu visual animasi selesai sebelum menjalankan aksi pendaratan
     // 250ms per step (karena PlayerToken3D bergerak 4 kotak per detik) + 250ms ekstra padding
     setTimeout(() => {
       set({ phase: 'post-moving', movementSteps: 0 });
+      get()._sync();
       setTimeout(() => {
         get()._handleLanding(finalPos, get().players[pIdx]);
       }, 500);
@@ -791,6 +801,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         phase: 'end-turn',
         log: [...state.log, `🚔 ${player.name} dijebloskan ke penjara!`]
       });
+      get()._sync();
       return;
     }
 
@@ -912,5 +923,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       default:
         set({ phase: 'end-turn' });
     }
+    
+    // Sync to all other players
+    get()._sync();
   },
 }));

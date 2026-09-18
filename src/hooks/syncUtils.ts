@@ -1,4 +1,4 @@
-﻿// --- Sync Utilities ---------------------------------------------------------
+// --- Sync Utilities ---------------------------------------------------------
 // Upload turn state ke Firebase Realtime Database (RTDB).
 // RTDB pakai WebSocket persistent -- jauh lebih cepat dari Firestore.
 
@@ -54,6 +54,9 @@ function buildTurnPayload(state: GameState, uid: string) {
     turnVersion: state.turnVersion ?? 0,
     physicsRollTrigger: (state as any).physicsRollTrigger ?? 0,
     sessionName: (state as any).sessionName ?? null,
+    movementSteps: (state as any).movementSteps ?? 0,
+    movementDirection: (state as any).movementDirection ?? 1,
+    localDicePositions: (state as any).localDicePositions ?? null,
 
     // Metadata untuk echo prevention
     lastWriter: uid,
