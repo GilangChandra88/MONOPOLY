@@ -270,11 +270,18 @@ function SinglePhysicsDice({
       prevTrigger.current = physicsRollTrigger;
       
       // Lemparan otomatis via tombol UI (programmatic roll)
-      const offset = id === 1 ? -1 : 1;
-      rigidBody.current.setTranslation({ x: offset * 2, y: 5 + Math.random() * 2, z: (Math.random() - 0.5) * 4 }, true);
+      const currentPos = rigidBody.current.translation();
+      
+      // Melompat dari posisinya saat ini (melanjutkan posisi terakhir)
+      rigidBody.current.setTranslation({ 
+        x: currentPos.x, 
+        y: currentPos.y + 3 + Math.random() * 2, 
+        z: currentPos.z 
+      }, true);
+      
       rigidBody.current.setLinvel({
         x: (Math.random() - 0.5) * 15,
-        y: -10,
+        y: -5, // Sedikit lemparan ke atas/bawah
         z: (Math.random() - 0.5) * 15
       }, true);
       rigidBody.current.setAngvel({
@@ -298,10 +305,40 @@ function SinglePhysicsDice({
     }
   };
 
+  // Tentukan posisi awal (jika merefresh halaman, gunakan posisi terakhir)
+  const initialPos = useRef<[number, number, number] | undefined>(undefined);
+  const initialRot = useRef<[number, number, number] | undefined>(undefined);
+  
+  if (!initialPos.current) {
+    const dicePositions = useGameStore.getState().localDicePositions;
+    if (dicePositions && dicePositions.d1 && dicePositions.d2) {
+      const posArray = id === 1 ? dicePositions.d1.pos : dicePositions.d2.pos;
+      const quatArray = id === 1 ? dicePositions.d1.quat : dicePositions.d2.quat;
+      
+      if (posArray) {
+        initialPos.current = [posArray[0], posArray[1], posArray[2]];
+      }
+      if (quatArray) {
+        // Convert quat back to euler for the RigidBody rotation prop
+        const q = new THREE.Quaternion(quatArray[0], quatArray[1], quatArray[2], quatArray[3]);
+        const euler = new THREE.Euler().setFromQuaternion(q);
+        initialRot.current = [euler.x, euler.y, euler.z];
+      }
+    }
+    if (!initialPos.current) {
+      initialPos.current = [id === 1 ? -2 : 2, 0.5, 0];
+    }
+    if (!initialRot.current) {
+      const defaultRot = getRotationForValue(logicalValue);
+      initialRot.current = [defaultRot.x, defaultRot.y, defaultRot.z];
+    }
+  }
+
   return (
     <RigidBody
       ref={rigidBody}
-      position={[id === 1 ? -2 : 2, 5, 0]} // Posisi awal sebelum ditarik
+      position={initialPos.current}
+      rotation={initialRot.current}
       colliders="cuboid"
       restitution={0.4}
       friction={0.8}
