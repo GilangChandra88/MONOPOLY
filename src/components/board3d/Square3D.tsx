@@ -150,57 +150,6 @@ function useSafeTexture(url: string | undefined) {
 }
 
 // ─── KOMPONEN IKON 3D ─────────────────────────────────────────────────────────
-
-function ChestIcon() {
-  return (
-    <group position={[0, 0.6, 0]}>
-      <FloatingAnim floatHeight={0.05} spinSpeed={0.01}>
-        <Box args={[0.8, 0.5, 0.6]} position={[0, 0.25, 0]} castShadow>
-          <meshStandardMaterial color="#8b4513" /> {/* Brown wood */}
-        </Box>
-        <Cylinder args={[0.3, 0.3, 0.8, 16, 1, false, 0, Math.PI]} rotation={[0, 0, -Math.PI / 2]} position={[0, 0.5, 0]} castShadow>
-          <meshStandardMaterial color="#a0522d" /> {/* Lighter wood lid */}
-        </Cylinder>
-        <Box args={[0.1, 0.1, 0.1]} position={[0, 0.45, 0.3]} castShadow>
-          <meshStandardMaterial color="#fbbf24" metalness={0.8} roughness={0.2} /> {/* Gold lock */}
-        </Box>
-      </FloatingAnim>
-    </group>
-  );
-}
-
-function QuestionIcon() {
-  return (
-    <group position={[0, 0.8, 0]}>
-      <FloatingAnim spinSpeed={0.02}>
-        <Billboard>
-          <Text fontSize={0.8} color="#f59e0b" outlineWidth={0.05} outlineColor="white" fontWeight="bold">
-            ?
-          </Text>
-        </Billboard>
-      </FloatingAnim>
-    </group>
-  );
-}
-
-function CoinStackIcon() {
-  return (
-    <group position={[0, 0.6, 0]}>
-      <FloatingAnim spinSpeed={0.01}>
-        <Cylinder args={[0.3, 0.3, 0.1, 16]} position={[0, 0.05, 0]} castShadow>
-          <meshStandardMaterial color="#fbbf24" metalness={0.8} roughness={0.2} />
-        </Cylinder>
-        <Cylinder args={[0.3, 0.3, 0.1, 16]} position={[0.1, 0.2, -0.1]} castShadow>
-          <meshStandardMaterial color="#fbbf24" metalness={0.8} roughness={0.2} />
-        </Cylinder>
-        <Cylinder args={[0.3, 0.3, 0.1, 16]} position={[-0.1, 0.35, 0.1]} castShadow>
-          <meshStandardMaterial color="#fbbf24" metalness={0.8} roughness={0.2} />
-        </Cylinder>
-      </FloatingAnim>
-    </group>
-  );
-}
-
 function GoIcon() {
   return (
     <group position={[0, 0.8, 0]}>
@@ -253,19 +202,7 @@ function SirenIcon() {
   );
 }
 
-function ParkingIcon() {
-  return (
-    <group position={[0, 0.8, 0]}>
-      <FloatingAnim spinSpeed={0.02}>
-        <Billboard>
-          <Text fontSize={0.8} color="#3b82f6" outlineWidth={0.05} outlineColor="white" fontWeight="bold">
-            P
-          </Text>
-        </Billboard>
-      </FloatingAnim>
-    </group>
-  );
-}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -426,13 +363,9 @@ export default function Square3D({ id }: { id: number }) {
         ))
       )}
       {/* Ikon 3D Khusus */}
-      {sq.type === 'community-chest' && <ChestIcon />}
-      {sq.type === 'chance' && <QuestionIcon />}
       {sq.type === 'go' && <GoIcon />}
-      {(sq.type === 'income-tax' || sq.type === 'luxury-tax') && <CoinStackIcon />}
       {sq.type === 'jail' && <JailBarsIcon />}
       {sq.type === 'go-to-jail' && <SirenIcon />}
-      {sq.type === 'free-parking' && <ParkingIcon />}
 
       {/* Transparent Click Target for Interaction */}
       <mesh 
