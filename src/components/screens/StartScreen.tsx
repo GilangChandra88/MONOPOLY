@@ -64,8 +64,8 @@ export default function StartScreen({ onCancel }: StartScreenProps) {
       const latestState = useGameStore.getState();
       const uid = auth.currentUser.uid;
 
-      // 1. RTDB — state game lengkap (cepat, WebSocket)
-      const rtdbPayload = {
+      // RTDB tidak menerima undefined -- JSON.parse(stringify) untuk strip undefined
+      const rtdbPayload = JSON.parse(JSON.stringify({
         players: latestState.players,
         currentPlayerIndex: latestState.currentPlayerIndex,
         phase: latestState.phase,
@@ -90,7 +90,7 @@ export default function StartScreen({ onCancel }: StartScreenProps) {
         sessionName: finalSessionName,
         lastWriter: uid,
         updatedAt: Date.now(),
-      };
+      }));
       await set(ref(rtdb, `games/${generatedId}`), rtdbPayload);
 
       // 2. Firestore — metadata lobby saja (untuk query list sesi & invite code)
