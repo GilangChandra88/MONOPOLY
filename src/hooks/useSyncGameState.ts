@@ -1,20 +1,20 @@
-﻿// ─── useSyncGameState ─────────────────────────────────────────────────────────
-// Hook untuk sinkronisasi state game dengan Firestore.
+﻿// --- useSyncGameState -------------------------------------------------------
+// Hook sinkronisasi state game dengan Firebase Realtime Database (RTDB).
 //
-// ARSITEKTUR BARU:
-//  - Upload hanya dilakukan EKSPLISIT via uploadTurnState() dari action-action kunci.
-//  - Tidak ada lagi reactive useEffect yang memantau 14 dependencies.
-//  - onSnapshot hanya merge field PERMANEN (turn state), bukan seluruh state lokal.
-//  - turnVersion digunakan untuk mencegah echo dari diri sendiri & race condition.
+// ARSITEKTUR RTDB:
+//  - onValue() pakai WebSocket persistent -- fire langsung saat data berubah.
+//  - Upload dilakukan EKSPLISIT via uploadTurnState() dari action-action kunci.
+//  - Hydration awal: restore full state dari RTDB saat join game.
+//  - Update real-time: merge hanya TURN_STATE_FIELDS, skip echo dari diri sendiri.
 
 import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
-import { db } from '../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { rtdb } from '../firebase';
+import { ref, onValue, off } from 'firebase/database';
 import type { User } from 'firebase/auth';
 
 // Field TURN STATE yang disinkronisasi antar pemain.
-// Field ephemeral (localDicePositions, history, movementSteps, cameraStates) TIDAK disini.
+// Field ephemeral (localDicePositions, history, movementSteps, cameraStates) TIDAK di sini.
 const TURN_STATE_FIELDS = [
   'players', 'currentPlayerIndex', 'phase', 'dice', 'doublesCount',
   'ownedProperties', 'houses', 'hotels', 'freeParkingMoney', 'log',
@@ -27,7 +27,6 @@ export function useSyncGameState(user: User | null, sessionId: string | null) {
   const [isLoaded, setIsLoaded] = useState(false);
   const isHydrating = useRef(true);
 
-  // Muat data awal & pantau perubahan dari pemain lain via onSnapshot
   useEffect(() => {
     if (!user || !sessionId) {
       setIsLoaded(false);
@@ -38,44 +37,37 @@ export function useSyncGameState(user: User | null, sessionId: string | null) {
     isHydrating.current = true;
     setIsLoaded(false);
 
-    const gameDocRef = doc(db, 'games', sessionId);
+    const gameRef = ref(rtdb, `games/${sessionId}`);
 
-    const unsubscribe = onSnapshot(gameDocRef, (docSnap) => {
-      if (!docSnap.exists()) {
+    // onValue() - WebSocket persistent, langsung push saat data berubah
+    const handleSnapshot = (snapshot: any) => {
+      if (!snapshot.exists()) {
         setIsLoaded(true);
         isHydrating.current = false;
         return;
       }
 
-      const data = docSnap.data();
+      const data = snapshot.val();
       if (!data || !data.players || data.players.length === 0) {
         setIsLoaded(true);
         isHydrating.current = false;
         return;
       }
 
-      // ── Hydration awal: restore semua state dari DB ──────────────────────
+      // -- Hydration awal: restore semua state dari RTDB ------------------
       if (isHydrating.current) {
-        const { creatorId, updatedAt, createdAt, historyStr, history, lastWriter, ...restState } = data;
-
-        let parsedHistory: any[] = [];
-        if (historyStr) {
-          try { parsedHistory = JSON.parse(historyStr); } catch (_) {}
-        } else if (history) {
-          parsedHistory = history;
-        }
-
-        useGameStore.setState({ ...restState, history: parsedHistory } as any);
+        const { creatorId, updatedAt, lastWriter, ...restState } = data;
+        useGameStore.setState({ ...restState } as any);
         setIsLoaded(true);
         isHydrating.current = false;
         return;
       }
 
-      // ── Update real-time dari pemain LAIN ────────────────────────────────
+      // -- Update real-time dari pemain LAIN --------------------------------
       // Abaikan echo dari diri sendiri
       if (data.lastWriter && data.lastWriter === user.uid) return;
 
-      // Ambil hanya TURN STATE — jangan override state lokal (history, dice position, dll)
+      // Ambil hanya TURN STATE -- jangan override state lokal
       const patch: Record<string, any> = {};
       for (const field of TURN_STATE_FIELDS) {
         if (data[field] !== undefined) {
@@ -83,22 +75,22 @@ export function useSyncGameState(user: User | null, sessionId: string | null) {
         }
       }
 
-      // Juga restore history jika ada
-      if (data.historyStr) {
-        try { patch.history = JSON.parse(data.historyStr); } catch (_) {}
-      }
-
       if (Object.keys(patch).length > 0) {
         useGameStore.setState(patch as any);
       }
+    };
 
-    }, (error) => {
-      console.error('[useSyncGameState] Gagal memuat data sesi:', error);
+    const handleError = (error: Error) => {
+      console.error('[useSyncGameState] Gagal memuat data sesi dari RTDB:', error);
       setIsLoaded(true);
       isHydrating.current = false;
-    });
+    };
 
-    return () => unsubscribe();
+    onValue(gameRef, handleSnapshot, handleError);
+
+    return () => {
+      off(gameRef, 'value', handleSnapshot);
+    };
   }, [user, sessionId]);
 
   return { isLoaded };

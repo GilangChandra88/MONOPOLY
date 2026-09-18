@@ -1,14 +1,15 @@
-﻿// ─── Sync Utilities ────────────────────────────────────────────────────────────
-// Fungsi mandiri untuk upload turn state ke Firestore.
+﻿// --- Sync Utilities ---------------------------------------------------------
+// Upload turn state ke Firebase Realtime Database (RTDB).
+// RTDB pakai WebSocket persistent -- jauh lebih cepat dari Firestore.
 // Dipanggil EKSPLISIT dari action-action kunci (bukan reaktif useEffect).
 
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { ref, set } from 'firebase/database';
+import { rtdb } from '../firebase';
 import type { GameState } from '../types/game';
 
 /**
- * Field yang DISINKRONISASI ke database (state permanen permainan).
- * Field ephemeral seperti localDicePositions, history, movementSteps TIDAK disertakan.
+ * Bangun payload yang akan dikirim ke RTDB.
+ * Field ephemeral (history, localDicePositions, movementSteps) TIDAK disertakan.
  */
 function buildTurnPayload(state: GameState, uid: string) {
   return {
@@ -17,35 +18,36 @@ function buildTurnPayload(state: GameState, uid: string) {
     phase: state.phase,
     dice: state.dice,
     doublesCount: state.doublesCount,
-    ownedProperties: state.ownedProperties,
-    houses: state.houses,
-    hotels: state.hotels,
+    ownedProperties: state.ownedProperties ?? {},
+    houses: state.houses ?? {},
+    hotels: state.hotels ?? {},
     freeParkingMoney: state.freeParkingMoney,
     log: state.log.slice(-50),
-    winner: state.winner,
-    pendingRent: state.pendingRent,
-    pendingRentOwner: state.pendingRentOwner,
-    activeCard: state.activeCard,
-    activeCardType: state.activeCardType,
-    chanceDeck: state.chanceDeck || [],
-    communityDeck: state.communityDeck || [],
-    isOnline: state.isOnline,
-    activeInviteCodes: state.activeInviteCodes,
-    physicsRollTrigger: (state as any).physicsRollTrigger,
-    turnVersion: state.turnVersion,
+    winner: state.winner ?? null,
+    pendingRent: state.pendingRent ?? null,
+    pendingRentOwner: state.pendingRentOwner ?? null,
+    activeCard: state.activeCard ?? null,
+    activeCardType: state.activeCardType ?? null,
+    chanceDeck: state.chanceDeck ?? [],
+    communityDeck: state.communityDeck ?? [],
+    isOnline: state.isOnline ?? false,
+    activeInviteCodes: state.activeInviteCodes ?? [],
+    turnVersion: state.turnVersion ?? 0,
+    physicsRollTrigger: (state as any).physicsRollTrigger ?? 0,
+    sessionName: (state as any).sessionName ?? null,
 
-    // Metadata sesi
+    // Metadata untuk echo prevention
     lastWriter: uid,
-    updatedAt: serverTimestamp(),
+    updatedAt: Date.now(),
   };
 }
 
 /**
- * Upload state permainan saat ini ke Firestore.
+ * Upload state permainan saat ini ke RTDB.
  * Harus dipanggil SETELAH set() di store agar data yang diupload adalah yang terbaru.
  *
  * @param state     - snapshot GameState terbaru (panggil get() sebelum memanggil ini)
- * @param sessionId - ID sesi Firestore
+ * @param sessionId - ID sesi game
  * @param uid       - Firebase Auth UID pemain yang sedang aktif
  */
 export async function uploadTurnState(
@@ -57,8 +59,9 @@ export async function uploadTurnState(
 
   const payload = buildTurnPayload(state, uid);
   try {
-    await setDoc(doc(db, 'games', sessionId), payload, { merge: true });
+    // RTDB set() -- menggantikan setDoc Firestore, WebSocket langsung broadcast ke semua listener
+    await set(ref(rtdb, `games/${sessionId}`), payload);
   } catch (err) {
-    console.error('[syncUtils] Gagal upload turn state:', err);
+    console.error('[syncUtils] Gagal upload turn state ke RTDB:', err);
   }
 }

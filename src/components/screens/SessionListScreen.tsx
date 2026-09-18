@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { db } from '../../firebase';
-import { collection, query, where, getDocs, orderBy, limit, updateDoc, doc } from 'firebase/firestore';
+import { db, rtdb } from '../../firebase';
+import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { ref, get as rtdbGet, update } from 'firebase/database';
 import type { User } from 'firebase/auth';
 
 interface GameSession {
@@ -83,6 +84,7 @@ export default function SessionListScreen({ user, onSelectSession, onCreateNew, 
     setJoinError('');
 
     try {
+      // 1. Query Firestore (metadata) untuk cari game dengan kode ini
       const q = query(collection(db, 'games'), where('activeInviteCodes', 'array-contains', code));
       const snapshot = await getDocs(q);
 
@@ -93,25 +95,41 @@ export default function SessionListScreen({ user, onSelectSession, onCreateNew, 
       }
 
       const gameDoc = snapshot.docs[0];
-      const gameData = gameDoc.data();
+      const sessionId = gameDoc.id;
+      const gameMetadata = gameDoc.data();
 
-      // Temukan pemain dengan kode ini
-      const updatedPlayers = gameData.players.map((p: any) => {
-        if (p.inviteCode === code) {
-          return { ...p, userId: user.uid, inviteCode: null }; // Hapus kode agar tidak dipakai lagi
-        }
-        return p;
-      });
+      // 2. Baca state game dari RTDB
+      const rtdbSnap = await rtdbGet(ref(rtdb, `games/${sessionId}`));
+      if (!rtdbSnap.exists()) {
+        setJoinError('Data game tidak ditemukan.');
+        setIsJoining(false);
+        return;
+      }
 
-      // Hapus dari activeInviteCodes
-      const newActiveCodes = (gameData.activeInviteCodes || []).filter((c: string) => c !== code);
+      const rtdbData = rtdbSnap.val();
+      const players: any[] = rtdbData.players || [];
 
+      // 3. Temukan slot pemain dengan kode ini
+      const playerIndex = players.findIndex((p: any) => p.inviteCode === code);
+      if (playerIndex === -1) {
+        setJoinError('Kode tidak valid.');
+        setIsJoining(false);
+        return;
+      }
+
+      // 4. Update RTDB — set userId pada slot pemain yang join
+      const updatedPlayer = { ...players[playerIndex], userId: user.uid, inviteCode: null };
+      await update(ref(rtdb, `games/${sessionId}/players/${playerIndex}`), updatedPlayer);
+
+      // 5. Update Firestore metadata — hapus kode dari activeInviteCodes, tambah ke participantIds
+      const newActiveCodes = (gameMetadata.activeInviteCodes || []).filter((c: string) => c !== code);
+      const participantIds = Array.from(new Set([...(gameMetadata.participantIds || []), user.uid]));
       await updateDoc(gameDoc.ref, {
-        players: updatedPlayers,
-        activeInviteCodes: newActiveCodes
+        activeInviteCodes: newActiveCodes,
+        participantIds,
       });
 
-      onSelectSession(gameDoc.id, gameData.sessionName || 'Permainan Online');
+      onSelectSession(sessionId, gameMetadata.sessionName || 'Permainan Online');
 
     } catch (error) {
       console.error(error);

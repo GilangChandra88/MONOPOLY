@@ -3,8 +3,9 @@ import { motion } from 'framer-motion';
 import { useGameStore } from '../../store/useGameStore';
 import { TOKEN_COLORS, TOKEN_EMOJIS, TOKEN_BG } from '../../types/game';
 import type { TokenColor } from '../../types/game';
-import { db, auth } from '../../firebase';
+import { db, auth, rtdb } from '../../firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, set } from 'firebase/database';
 
 interface PlayerConfig {
   name: string;
@@ -49,51 +50,58 @@ export default function StartScreen({ onCancel }: StartScreenProps) {
       name: c.name.trim() || `Pemain ${configs.indexOf(c) + 1}`,
       color: c.color,
     }));
-    
-    // Generate new session ID using Firebase doc ref
+
+    // Generate session ID via Firestore doc ref (only for ID generation)
     const newSessionRef = doc(db, 'games', 'placeholder').parent;
-    const newDoc = doc(newSessionRef);
-    const generatedId = newDoc.id;
-    
+    const generatedId = doc(newSessionRef).id;
     const finalSessionName = sessionName.trim() || `Sesi Game ${new Date().toLocaleDateString('id-ID')}`;
-    
-    // Setup state lokal
+
+    // Setup local Zustand state
     setupGame(validConfigs, isOnline, auth.currentUser?.uid);
     setSessionInfo(generatedId, finalSessionName);
 
-    // Jika online: langsung upload ke Firebase agar kode undangan tersedia
-    // sebelum pemain lain mencoba join. (uploadTurnState di store butuh sessionId
-    // yang baru saja di-set, jadi kita ambil state terbaru via getState())
     if (isOnline && auth.currentUser) {
       const latestState = useGameStore.getState();
-      const payload = {
+      const uid = auth.currentUser.uid;
+
+      // 1. RTDB — state game lengkap (cepat, WebSocket)
+      const rtdbPayload = {
         players: latestState.players,
         currentPlayerIndex: latestState.currentPlayerIndex,
         phase: latestState.phase,
         dice: latestState.dice,
         doublesCount: latestState.doublesCount,
-        ownedProperties: latestState.ownedProperties,
-        houses: latestState.houses,
-        hotels: latestState.hotels,
+        ownedProperties: latestState.ownedProperties ?? {},
+        houses: latestState.houses ?? {},
+        hotels: latestState.hotels ?? {},
         freeParkingMoney: latestState.freeParkingMoney,
         log: latestState.log,
-        winner: latestState.winner,
-        pendingRent: latestState.pendingRent,
-        pendingRentOwner: latestState.pendingRentOwner,
-        activeCard: latestState.activeCard,
-        activeCardType: latestState.activeCardType,
-        chanceDeck: latestState.chanceDeck || [],
-        communityDeck: latestState.communityDeck || [],
+        winner: latestState.winner ?? null,
+        pendingRent: latestState.pendingRent ?? null,
+        pendingRentOwner: latestState.pendingRentOwner ?? null,
+        activeCard: latestState.activeCard ?? null,
+        activeCardType: latestState.activeCardType ?? null,
+        chanceDeck: latestState.chanceDeck ?? [],
+        communityDeck: latestState.communityDeck ?? [],
         isOnline: true,
-        activeInviteCodes: latestState.activeInviteCodes || [],
+        activeInviteCodes: latestState.activeInviteCodes ?? [],
         turnVersion: latestState.turnVersion,
+        physicsRollTrigger: 0,
         sessionName: finalSessionName,
-        creatorId: auth.currentUser.uid,
-        participantIds: [auth.currentUser.uid],
-        lastWriter: auth.currentUser.uid,
-        updatedAt: serverTimestamp(),
+        lastWriter: uid,
+        updatedAt: Date.now(),
       };
-      await setDoc(doc(db, 'games', generatedId), payload);
+      await set(ref(rtdb, `games/${generatedId}`), rtdbPayload);
+
+      // 2. Firestore — metadata lobby saja (untuk query list sesi & invite code)
+      await setDoc(doc(db, 'games', generatedId), {
+        sessionName: finalSessionName,
+        creatorId: uid,
+        participantIds: [uid],
+        activeInviteCodes: latestState.activeInviteCodes ?? [],
+        winner: null,
+        updatedAt: serverTimestamp(),
+      });
     }
   }
 
