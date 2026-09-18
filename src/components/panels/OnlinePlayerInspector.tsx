@@ -75,11 +75,16 @@ export default function OnlinePlayerInspector() {
           </div>
         </div>
 
-        {/* Opsi khusus HOST untuk melihat KODE UNDANGAN di Mobile */}
-        {(players[0]?.userId === auth.currentUser?.uid) && !activePlayer.userId && activePlayer.inviteCode && (
-          <div className="flex items-center justify-between bg-yellow-500/20 border border-yellow-500/30 rounded-xl px-3 py-2">
-            <span className="text-[10px] text-yellow-500/70 uppercase font-black tracking-widest">KODE UNDANGAN:</span>
-            <span className="text-sm text-yellow-300 font-mono font-bold select-all tracking-wider">{activePlayer.inviteCode}</span>
+        {/* Opsi khusus HOST untuk melihat KODE UNDANGAN di Mobile secara langsung */}
+        {(players[0]?.userId === auth.currentUser?.uid) && players.some(p => !p.userId && p.inviteCode) && (
+          <div className="flex flex-col gap-1 mt-1">
+            <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest">KODE UNDANGAN:</span>
+            {players.filter(p => !p.userId && p.inviteCode).map(p => (
+              <div key={p.id} className="flex items-center justify-between bg-yellow-500/20 border border-yellow-500/30 rounded-lg px-3 py-1.5">
+                <span className="text-xs text-yellow-500/90">{p.name}</span>
+                <span className="text-sm text-yellow-300 font-mono font-bold select-all tracking-wider">{p.inviteCode}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
