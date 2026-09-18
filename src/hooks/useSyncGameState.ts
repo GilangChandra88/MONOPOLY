@@ -147,6 +147,20 @@ export function useSyncGameState(user: User | null, sessionId: string | null) {
       for (const field of TURN_STATE_FIELDS) {
         if (data[field] !== undefined) {
           patch[field] = data[field];
+        } else {
+          // Jika field tidak ada di RTDB (karena di-delete akibat bernilai null/empty),
+          // kita harus menghapusnya juga di lokal agar tidak terjadi stale state.
+          if (ARRAY_FIELDS.includes(field as any)) {
+            patch[field] = [];
+          } else if (field === 'ownedProperties' || field === 'houses' || field === 'hotels') {
+            patch[field] = {};
+          } else if (field === 'movementSteps' || field === 'doublesCount') {
+            patch[field] = 0;
+          } else if (field === 'movementDirection') {
+            patch[field] = 1;
+          } else {
+            patch[field] = null;
+          }
         }
       }
 
