@@ -126,9 +126,9 @@ function SinglePhysicsDice({
           // Lerp position for smooth network movement
           const currentPos = rigidBody.current.translation();
           const nextPos = new THREE.Vector3(currentPos.x, currentPos.y, currentPos.z)
-            .lerp(new THREE.Vector3(trans.p.x, trans.p.y, trans.p.z), 0.5);
+            .lerp(new THREE.Vector3(trans.p.x, trans.p.y, trans.p.z), 0.2);
           
-          rigidBody.current.setTranslation(nextPos, true);
+          rigidBody.current.setNextKinematicTranslation(nextPos);
           
           // Slerp rotation
           const currentQuat = new THREE.Quaternion(
@@ -138,11 +138,9 @@ function SinglePhysicsDice({
             rigidBody.current.rotation().w
           );
           const targetQuat = new THREE.Quaternion(trans.q.x, trans.q.y, trans.q.z, trans.q.w);
-          currentQuat.slerp(targetQuat, 0.5);
+          currentQuat.slerp(targetQuat, 0.2);
           
-          rigidBody.current.setRotation(currentQuat, true);
-          rigidBody.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
-          rigidBody.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
+          rigidBody.current.setNextKinematicRotation(currentQuat);
         }
       } else {
         // Mode statis saat tidak bergerak (menampilkan hasil akhir atau idle)
@@ -159,18 +157,15 @@ function SinglePhysicsDice({
            if (quatArray) targetRotQuat = new THREE.Quaternion(quatArray[0], quatArray[1], quatArray[2], quatArray[3]);
         }
 
-        rigidBody.current.setTranslation(targetPos, true);
+        rigidBody.current.setNextKinematicTranslation(targetPos);
         
         if (targetRotQuat) {
-          rigidBody.current.setRotation(targetRotQuat, true);
+          rigidBody.current.setNextKinematicRotation(targetRotQuat);
         } else {
           const targetRot = getRotationForValue(logicalValue);
           const euler = new THREE.Euler(targetRot.x, targetRot.y, targetRot.z);
-          rigidBody.current.setRotation(new THREE.Quaternion().setFromEuler(euler), true);
+          rigidBody.current.setNextKinematicRotation(new THREE.Quaternion().setFromEuler(euler));
         }
-        
-        rigidBody.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
-        rigidBody.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
       }
       return;
     }
@@ -337,6 +332,7 @@ function SinglePhysicsDice({
   return (
     <RigidBody
       ref={rigidBody}
+      type={isMe ? "dynamic" : "kinematicPosition"}
       position={initialPos.current}
       rotation={initialRot.current}
       colliders="cuboid"
