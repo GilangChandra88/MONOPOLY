@@ -11,7 +11,7 @@ export default function MobileNavBar() {
   ] as const;
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900 border-t border-slate-700 z-[100] flex justify-around items-center px-2 pb-safe shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 h-[72px] bg-slate-900 border-t border-slate-700 z-[100] flex justify-around items-center px-2 pb-2 shadow-[0_-5px_15px_rgba(0,0,0,0.5)]">
       {navItems.map((item) => {
         const isActive = mobileTab === item.id;
         return (

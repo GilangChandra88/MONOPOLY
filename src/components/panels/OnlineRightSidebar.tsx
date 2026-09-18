@@ -19,7 +19,7 @@ export default function OnlineRightSidebar() {
       </div>
 
       {/* Mobile Views */}
-      <div className="md:hidden absolute inset-0 pointer-events-none z-40 flex flex-col pt-12 pb-20 px-2 overflow-hidden">
+      <div className="md:hidden absolute inset-0 pointer-events-none z-40 flex flex-col pt-12 pb-28 px-2 overflow-hidden">
         
         {/* TAB: LOG */}
         {mobileTab === 'log' && (
