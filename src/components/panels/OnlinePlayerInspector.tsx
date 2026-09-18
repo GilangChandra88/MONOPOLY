@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { BOARD_SQUARES, COLOR_MAP } from '../../data/board';
 import { isProperty } from '../../types/board';
+import { auth } from '../../firebase';
 
 export default function OnlinePlayerInspector() {
   const { players, ownedProperties } = useGameStore();
@@ -57,20 +58,30 @@ export default function OnlinePlayerInspector() {
       </div>
 
       {/* Info Pemain Terpilih (Mobile Only) */}
-      <div className="md:hidden flex items-center gap-3 mt-2 px-1">
-        <div className="flex-1 bg-black/30 rounded-xl p-2 border border-white/10 flex flex-col justify-center shadow-inner">
-           <span className="text-[10px] text-white/50 uppercase tracking-widest mb-1 font-bold">Saldo</span>
-           <span className="text-emerald-400 font-black text-sm">
-             {activePlayer.money >= 1_000_000 ? `Rp ${(activePlayer.money / 1_000_000).toFixed(1)}M` : `Rp ${activePlayer.money / 1_000}K`}
-           </span>
+      <div className="md:hidden flex flex-col gap-2 mt-2 px-1">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 bg-black/30 rounded-xl p-2 border border-white/10 flex flex-col justify-center shadow-inner">
+             <span className="text-[10px] text-white/50 uppercase tracking-widest mb-1 font-bold">Saldo</span>
+             <span className="text-emerald-400 font-black text-sm">
+               {activePlayer.money >= 1_000_000 ? `Rp ${(activePlayer.money / 1_000_000).toFixed(1)}M` : `Rp ${activePlayer.money / 1_000}K`}
+             </span>
+          </div>
+          
+          <div className="flex-1 bg-black/30 rounded-xl p-2 border border-white/10 flex flex-col justify-center shadow-inner">
+             <span className="text-[10px] text-white/50 uppercase tracking-widest mb-1 font-bold">Status</span>
+             <span className={`text-xs font-black ${activePlayer.isBankrupt ? 'text-red-500' : activePlayer.inJail ? 'text-orange-400' : 'text-blue-400'}`}>
+               {activePlayer.isBankrupt ? 'BANGKRUT' : activePlayer.inJail ? 'DIPENJARA' : 'AKTIF'}
+             </span>
+          </div>
         </div>
-        
-        <div className="flex-1 bg-black/30 rounded-xl p-2 border border-white/10 flex flex-col justify-center shadow-inner">
-           <span className="text-[10px] text-white/50 uppercase tracking-widest mb-1 font-bold">Status</span>
-           <span className={`text-xs font-black ${activePlayer.isBankrupt ? 'text-red-500' : activePlayer.inJail ? 'text-orange-400' : 'text-blue-400'}`}>
-             {activePlayer.isBankrupt ? 'BANGKRUT' : activePlayer.inJail ? 'DIPENJARA' : 'AKTIF'}
-           </span>
-        </div>
+
+        {/* Opsi khusus HOST untuk melihat KODE UNDANGAN di Mobile */}
+        {(players[0]?.userId === auth.currentUser?.uid) && !activePlayer.userId && activePlayer.inviteCode && (
+          <div className="flex items-center justify-between bg-yellow-500/20 border border-yellow-500/30 rounded-xl px-3 py-2">
+            <span className="text-[10px] text-yellow-500/70 uppercase font-black tracking-widest">KODE UNDANGAN:</span>
+            <span className="text-sm text-yellow-300 font-mono font-bold select-all tracking-wider">{activePlayer.inviteCode}</span>
+          </div>
+        )}
       </div>
 
       {/* Daftar Aset */}
