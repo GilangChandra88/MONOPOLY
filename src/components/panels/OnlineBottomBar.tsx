@@ -26,7 +26,7 @@ export default function OnlineBottomBar() {
   };
 
   return (
-    <div className="absolute bottom-4 left-4 right-4 z-50 flex items-end justify-between pointer-events-none">
+    <div className="hidden md:flex absolute bottom-4 left-4 right-4 z-50 items-end justify-between pointer-events-none">
       {/* Kiri: Daftar Semua Status Pemain */}
       <div className="flex gap-2 pointer-events-auto">
         {players.map((p, i) => (

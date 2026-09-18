@@ -56,8 +56,25 @@ export default function OnlinePlayerInspector() {
         ))}
       </div>
 
+      {/* Info Pemain Terpilih (Mobile Only) */}
+      <div className="md:hidden flex items-center gap-3 mt-2 px-1">
+        <div className="flex-1 bg-black/30 rounded-xl p-2 border border-white/10 flex flex-col justify-center shadow-inner">
+           <span className="text-[10px] text-white/50 uppercase tracking-widest mb-1 font-bold">Saldo</span>
+           <span className="text-emerald-400 font-black text-sm">
+             {activePlayer.money >= 1_000_000 ? `Rp ${(activePlayer.money / 1_000_000).toFixed(1)}M` : `Rp ${activePlayer.money / 1_000}K`}
+           </span>
+        </div>
+        
+        <div className="flex-1 bg-black/30 rounded-xl p-2 border border-white/10 flex flex-col justify-center shadow-inner">
+           <span className="text-[10px] text-white/50 uppercase tracking-widest mb-1 font-bold">Status</span>
+           <span className={`text-xs font-black ${activePlayer.isBankrupt ? 'text-red-500' : activePlayer.inJail ? 'text-orange-400' : 'text-blue-400'}`}>
+             {activePlayer.isBankrupt ? 'BANGKRUT' : activePlayer.inJail ? 'DIPENJARA' : 'AKTIF'}
+           </span>
+        </div>
+      </div>
+
       {/* Daftar Aset */}
-      <div className="mt-2 bg-black/20 rounded-xl p-3 border border-white/5">
+      <div className="mt-2 bg-black/20 rounded-xl p-3 border border-white/5 flex-1 flex flex-col min-h-0">
         <div className="text-[10px] text-white/50 font-bold mb-2 uppercase tracking-widest flex justify-between items-center">
           <span>Aset ({playerProps.length})</span>
           {playerProps.length > 0 && <span className="text-[8px] italic opacity-50">Geser untuk melihat</span>}

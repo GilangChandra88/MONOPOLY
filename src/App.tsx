@@ -5,6 +5,7 @@ import GameScene from './components/board3d/GameScene';
 import StartScreen from './components/screens/StartScreen';
 import SessionListScreen from './components/screens/SessionListScreen';
 import EndScreen from './components/screens/EndScreen';
+import MobileNavBar from './components/panels/MobileNavBar';
 import LoginScreen from './components/screens/LoginScreen';
 import PropertyModal from './components/modals/PropertyModal';
 import CardRevealModal from './components/modals/CardRevealModal';
@@ -225,6 +226,7 @@ export default function App() {
 
       <CardRevealModal />
       <PropertyModalManager />
+      {isOnline && <MobileNavBar />}
     </div>
   );
 }

@@ -104,4 +104,5 @@ export interface UIState {
   openModal: ModalType;
   selectedSquareId: number | null;
   showLog: boolean;
+  mobileTab: 'map' | 'properti' | 'log';
 }
