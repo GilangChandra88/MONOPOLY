@@ -69,7 +69,10 @@ export interface GameState {
   cameraStates?: Record<string, { pos: [number, number, number], target: [number, number, number] }>;
   history?: any[];          // Riwayat untuk undo
   doublesCount: number;     // berapa kali kembar berturut-turut
-  localDicePositions?: { d1: [number, number, number], d2: [number, number, number] } | null;
+  localDicePositions?: { 
+    d1: { pos: [number, number, number], quat: [number, number, number, number] }, 
+    d2: { pos: [number, number, number], quat: [number, number, number, number] } 
+  } | null;
   ownedProperties: Record<number, string>; // squareId → playerId
   houses: Record<number, number>;          // squareId → jumlah rumah (0–4)
   hotels: Record<number, boolean>;         // squareId → punya hotel?

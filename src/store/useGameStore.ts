@@ -71,6 +71,7 @@ interface GameStore extends GameState {
   setIsDraggingDice: (val: boolean) => void;
   physicsRollTrigger: number;
   triggerPhysicalRoll: () => void;
+  _sync: () => void;
 
   // Actions
   setSessionInfo: (id: string, name: string) => void;
@@ -83,7 +84,10 @@ interface GameStore extends GameState {
   resolveRollWithPhysics: (
     d1: number, 
     d2: number,
-    dicePositions?: { d1: [number, number, number], d2: [number, number, number] }
+    dicePositions?: { 
+      d1: { pos: [number, number, number], quat: [number, number, number, number] }, 
+      d2: { pos: [number, number, number], quat: [number, number, number, number] } 
+    }
   ) => void;
   resolveRoll: () => void;
   _executeInstantMovement: (player: Player, steps: number, direction: 1 | -1) => void;
@@ -207,7 +211,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   resolveRollWithPhysics: (
     d1: number, 
     d2: number,
-    dicePositions?: { d1: [number, number, number], d2: [number, number, number] }
+    dicePositions?: { 
+      d1: { pos: [number, number, number], quat: [number, number, number, number] }, 
+      d2: { pos: [number, number, number], quat: [number, number, number, number] } 
+    }
   ) => {
     const state = get();
     if (state.phase !== 'rolling') return;

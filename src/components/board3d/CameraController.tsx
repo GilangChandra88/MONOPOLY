@@ -137,7 +137,7 @@ export default function CameraController() {
       let dicePos = [isD1 ? -2 : 2, 0.5, 0]; // Default fallback (untuk observer yang dadunya diam di tengah)
       
       if (dicePositions && dicePositions.d1 && dicePositions.d2) {
-        dicePos = isD1 ? dicePositions.d1 : dicePositions.d2;
+        dicePos = isD1 ? dicePositions.d1.pos : dicePositions.d2.pos;
       }
       
       // Calculate camera position relative to the dice

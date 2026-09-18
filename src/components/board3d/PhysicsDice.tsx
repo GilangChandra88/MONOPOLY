@@ -4,7 +4,16 @@ import { RigidBody, RapierRigidBody } from '@react-three/rapier';
 import { useGameStore } from '../../store/useGameStore';
 import * as THREE from 'three';
 import { Text, Box } from '@react-three/drei';
-import { auth } from '../../firebase';
+import { auth, rtdb } from '../../firebase';
+import { ref, onValue, off, set } from 'firebase/database';
+
+// Shared state untuk live dice syncing tanpa trigger re-render
+let lastBroadcastTime = 0;
+const remoteDiceState = {
+  d1: { p: { x: -2, y: 0.5, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 } },
+  d2: { p: { x: 2, y: 0.5, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 } },
+  isActive: false
+};
 
 const getRotationForValue = (val: number): { x: number, y: number, z: number } => {
   switch (val) {
@@ -107,32 +116,74 @@ function SinglePhysicsDice({
   useFrame((state, delta) => {
     if (!rigidBody.current) return;
     
-    // Observers TIDAK MENSIMULASIKAN FISIKA! Mereka hanya melihat hasil akhirnya secara statis di tengah papan.
+    const isActive = isDragging || isRolling;
+
     if (!isMe) {
-      // Kita tambahkan sedikit animasi "bling" (berputar/mengambang sedikit) saat isRolling true jika diinginkan,
-      // Tapi sesuai request, cukup diam saja dan update hasil
-      const targetRot = getRotationForValue(logicalValue);
-      const targetPos = { x: id === 1 ? -2 : 2, y: 0.5, z: 0 };
-      
-      rigidBody.current.setTranslation(targetPos, true);
-      const euler = new THREE.Euler(targetRot.x, targetRot.y, targetRot.z);
-      const quat = new THREE.Quaternion().setFromEuler(euler);
-      rigidBody.current.setRotation(quat, true);
-      rigidBody.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
-      rigidBody.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      if (remoteDiceState.isActive) {
+        // Mode observer (live physics syncing)
+        const trans = id === 1 ? remoteDiceState.d1 : remoteDiceState.d2;
+        if (trans && trans.p && trans.q) {
+          // Lerp position for smooth network movement
+          const currentPos = rigidBody.current.translation();
+          const nextPos = new THREE.Vector3(currentPos.x, currentPos.y, currentPos.z)
+            .lerp(new THREE.Vector3(trans.p.x, trans.p.y, trans.p.z), 0.5);
+          
+          rigidBody.current.setTranslation(nextPos, true);
+          
+          // Slerp rotation
+          const currentQuat = new THREE.Quaternion(
+            rigidBody.current.rotation().x,
+            rigidBody.current.rotation().y,
+            rigidBody.current.rotation().z,
+            rigidBody.current.rotation().w
+          );
+          const targetQuat = new THREE.Quaternion(trans.q.x, trans.q.y, trans.q.z, trans.q.w);
+          currentQuat.slerp(targetQuat, 0.5);
+          
+          rigidBody.current.setRotation(currentQuat, true);
+          rigidBody.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+          rigidBody.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        }
+      } else {
+        // Mode statis saat tidak bergerak (menampilkan hasil akhir atau idle)
+        const dicePositions = useGameStore.getState().localDicePositions;
+        
+        let targetPos = { x: id === 1 ? -2 : 2, y: 0.5, z: 0 };
+        let targetRotQuat: THREE.Quaternion | null = null;
+        
+        if (dicePositions && dicePositions.d1 && dicePositions.d2) {
+           const posArray = id === 1 ? dicePositions.d1.pos : dicePositions.d2.pos;
+           const quatArray = id === 1 ? dicePositions.d1.quat : dicePositions.d2.quat;
+           
+           if (posArray) targetPos = { x: posArray[0], y: posArray[1], z: posArray[2] };
+           if (quatArray) targetRotQuat = new THREE.Quaternion(quatArray[0], quatArray[1], quatArray[2], quatArray[3]);
+        }
+
+        rigidBody.current.setTranslation(targetPos, true);
+        
+        if (targetRotQuat) {
+          rigidBody.current.setRotation(targetRotQuat, true);
+        } else {
+          const targetRot = getRotationForValue(logicalValue);
+          const euler = new THREE.Euler(targetRot.x, targetRot.y, targetRot.z);
+          rigidBody.current.setRotation(new THREE.Quaternion().setFromEuler(euler), true);
+        }
+        
+        rigidBody.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        rigidBody.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      }
       return;
     }
 
-    if (isDragging && isMe) {
+    // --- LOGIC UNTUK PEMAIN AKTIF (isMe) ---
+    if (isDragging) {
       const offset = id === 1 ? -0.7 : 0.7;
       const targetPos = new THREE.Vector3(dragPoint.x + offset, 4, dragPoint.z);
       const currentPos = rigidBody.current.translation();
       
-      // Kalkulasi kecepatan (velocity) gesekan user
       if (delta > 0) {
         const vel = targetPos.clone().sub(lastDragPos.current).divideScalar(delta);
-        vel.clampLength(0, 50); // Batasi kecepatan maksimum agar tidak tembus map
-        // Smoothing kecepatan (mengambil rata-rata) agar lemparan terasa natural walau frame drop
+        vel.clampLength(0, 50);
         throwVel.current.lerp(vel, 0.3);
       }
       lastDragPos.current.copy(targetPos);
@@ -147,6 +198,40 @@ function SinglePhysicsDice({
         y: (Math.random() - 0.5) * 20,
         z: (Math.random() - 0.5) * 20
       }, true);
+    }
+
+    // Broadcast posisi ke pemain lain
+    if (isActive) {
+      const p = rigidBody.current.translation();
+      const q = rigidBody.current.rotation();
+      if (id === 1) remoteDiceState.d1 = { p, q };
+      if (id === 2) remoteDiceState.d2 = { p, q };
+      remoteDiceState.isActive = true;
+
+      // Cukup 1 dadu (id=1) yang bertanggung jawab upload agar tidak dobel
+      if (id === 1) {
+        const now = Date.now();
+        if (now - lastBroadcastTime > 50) { // ~20fps
+          lastBroadcastTime = now;
+          const sessionId = useGameStore.getState().sessionId;
+          if (sessionId) {
+            set(ref(rtdb, `live_dice/${sessionId}`), {
+              d1: remoteDiceState.d1,
+              d2: remoteDiceState.d2,
+              isActive: true
+            });
+          }
+        }
+      }
+    } else {
+      // Saat baru saja berhenti, pastikan observer tahu bahwa dadu sudah statis
+      if (remoteDiceState.isActive && id === 1) {
+        remoteDiceState.isActive = false;
+        const sessionId = useGameStore.getState().sessionId;
+        if (sessionId) {
+          set(ref(rtdb, `live_dice/${sessionId}`), { isActive: false });
+        }
+      }
     }
   });
 
@@ -246,7 +331,24 @@ export default function PhysicsDiceManager() {
   const [dragPoint, setDragPoint] = useState(new THREE.Vector3(0, 3, 0));
 
   const currentPlayer = players[currentPlayerIndex];
+  const sessionId = useGameStore(s => s.sessionId);
   const isMe = !isOnline || currentPlayer?.userId === auth.currentUser?.uid;
+
+  // Sinkronisasi dadu live untuk observer
+  useEffect(() => {
+    if (isOnline && sessionId && !isMe) {
+      const diceRef = ref(rtdb, `live_dice/${sessionId}`);
+      const unsub = onValue(diceRef, (snap) => {
+        const val = snap.val();
+        if (val) {
+          if (val.isActive !== undefined) remoteDiceState.isActive = val.isActive;
+          if (val.d1) remoteDiceState.d1 = val.d1;
+          if (val.d2) remoteDiceState.d2 = val.d2;
+        }
+      });
+      return () => off(diceRef, 'value', unsub);
+    }
+  }, [isOnline, sessionId, isMe]);
 
   const colorHex: Record<string, string> = {
     merah: '#ef4444',
@@ -349,7 +451,10 @@ export default function PhysicsDiceManager() {
         resolveRollWithPhysics(
           d1Result.val, 
           d2Result.val,
-          { d1: d1Result.pos, d2: d2Result.pos }
+          { 
+            d1: { pos: d1Result.pos, quat: d1Result.quat }, 
+            d2: { pos: d2Result.pos, quat: d2Result.quat } 
+          }
         );
       }, 500); // 500ms diam setelah jatuh, lalu mulai sekuens kamera
       return () => clearTimeout(timer);
